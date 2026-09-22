@@ -1,0 +1,86 @@
+APOGEE — Day 2 DELTA delivery manifest
+=======================================
+
+1. Baseline
+-----------
+This delta is produced against the Day 1 Apogee repository as delivered on Day 1
+(APOGEE-day1.zip, 44 files). That baseline is stated by the user to match the
+canonical repository on their machine/GitHub. This archive is NOT a standalone
+project and must be overlaid onto that Day 1 repository, preserving paths.
+
+No files in this archive were regenerated or reconstructed from memory for this
+delivery step: each was copied byte-for-byte from the working sandbox copy of the
+repository that Day 2 development produced, immediately before archiving, with no
+edits made during the copy.
+
+2. CREATED files (11)
+----------------------
+New files with no Day 1 counterpart:
+
+  backend/app/core/urls.py
+  backend/app/schemas/__init__.py
+  backend/app/schemas/capture.py
+  backend/app/services/__init__.py
+  backend/app/services/ingestion.py
+  backend/app/api/errors.py
+  backend/app/api/v1/capture.py
+  backend/tests/test_urls.py
+  backend/tests/test_capture_schemas.py
+  backend/tests/test_ingestion.py
+  backend/tests/test_capture_api.py
+
+3. MODIFIED files (10)
+------------------------
+Existing Day 1 files whose content changed for Day 2:
+
+  README.md
+  docs/architecture.md
+  docs/privacy.md
+  backend/app/api/v1/__init__.py
+  backend/app/main.py
+  backend/app/db/session.py
+  backend/app/models/page.py
+  backend/tests/factories.py
+  backend/tests/test_app.py
+  backend/tests/test_models.py
+
+4. DELETED files
+-----------------
+None. No Day 1 file was removed.
+
+5. Nature of this archive
+--------------------------
+This is a DELTA, not a full project. It contains only the 21 files listed in
+sections 2 and 3 above (11 created + 10 modified = 21 files, plus this manifest =
+22 files total in the archive). Every other Day 1 file (models, migrations,
+config, docker-compose, requirements, etc.) is UNCHANGED and is intentionally
+NOT included here — apply this delta on top of the existing Day 1 tree rather
+than replacing it.
+
+6. Test files included in this delta
+--------------------------------------
+  backend/tests/test_urls.py             — new (Day 2): URL normalization / domain extraction
+  backend/tests/test_capture_schemas.py  — new (Day 2): CaptureRequest validation, no DB
+  backend/tests/test_ingestion.py        — new (Day 2): page upsert / event ingestion, needs Postgres
+  backend/tests/test_capture_api.py      — new (Day 2): POST /api/v1/capture through FastAPI
+  backend/tests/test_app.py              — modified (Day 1 file): now asserts /api/v1/capture is
+                                            present in the OpenAPI schema alongside /api/v1/health
+  backend/tests/test_models.py           — modified (Day 1 file): now imports the shared count()
+                                            helper from tests/factories.py instead of defining its
+                                            own private copy
+
+Unmodified Day 1 test files (test_config.py, test_health.py, test_migrations.py) are
+NOT included, since they were not changed.
+
+7. Discrepancies against what was previously reported
+---------------------------------------------------------
+None. All 11 created files and all 10 modified files listed by the user as
+"previously reported" were confirmed present in the working repository
+immediately before this archive was built, and all 21 were copied successfully.
+Nothing on the expected list was found to be absent.
+
+Caveat carried over from earlier verification, restated here for completeness:
+none of these files have been executed against a real PostgreSQL database or a
+real pytest/FastAPI/SQLAlchemy installation in the sandbox that produced them
+(those packages and Postgres are unavailable there). This delta delivers exactly
+what exists on disk; it does not assert runtime-verified correctness.

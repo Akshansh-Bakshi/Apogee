@@ -12,7 +12,7 @@ def test_application_starts_and_stops_without_a_database() -> None:
         schema = client.get("/openapi.json")
 
         assert schema.status_code == 200
-        assert "/api/v1/health" in schema.json()["paths"]
+        assert {"/api/v1/health", "/api/v1/capture"} <= set(schema.json()["paths"])
         assert client.get("/does-not-exist").status_code == 404
 
 

@@ -30,10 +30,12 @@ class Page(Base):
     )
     user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
 
-    url: Mapped[str] = mapped_column(Text)  # first observed URL, as seen by the browser
-    # Normalised URL used as the dedup key. Bounded at 2048 chars so the unique btree index
-    # entry stays well under PostgreSQL's ~2.7 kB limit; expected to be percent-encoded ASCII.
-    # How URLs are normalised is decided at ingestion time (future work).
+    # First observed URL, after normalisation (fragment and tracking parameters removed; the raw
+    # URL is never stored). Today it equals canonical_url; the two can diverge once a canonical
+    # URL is inferred from page content, which is future work.
+    url: Mapped[str] = mapped_column(Text)
+    # The dedup key, produced by app.core.urls.normalize_url. Bounded at 2048 chars so the unique
+    # btree index entry stays well under PostgreSQL's ~2.7 kB limit; always percent-encoded ASCII.
     canonical_url: Mapped[str] = mapped_column(String(2048))
     title: Mapped[str | None] = mapped_column(Text)
     # Lowercased hostname (max DNS length 253). Registrable-domain grouping is future work.

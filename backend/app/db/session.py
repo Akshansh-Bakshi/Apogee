@@ -17,6 +17,8 @@ def create_db_engine(settings: Settings) -> Engine:
         settings.sqlalchemy_url,
         pool_pre_ping=True,
         connect_args={"connect_timeout": settings.db_connect_timeout_seconds},
+        # Bound parameters (URLs, titles) must never end up in exception messages or logs.
+        hide_parameters=True,
     )
 
 

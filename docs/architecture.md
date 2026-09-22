@@ -14,7 +14,8 @@ Browser Extension → Privacy Filter → Backend → PostgreSQL + pgvector → E
 |---|---|
 | Browser Extension | **Future** (`extension/` is a placeholder) |
 | Privacy Filter (in the extension, before upload) | **Future** |
-| Backend (FastAPI) | **Current**: health endpoint only |
+| Backend (FastAPI) | **Current**: `GET /api/v1/health`, `POST /api/v1/capture` (unauthenticated, development stage) |
+| Ingestion (validate → normalise URL → page upsert → event) | **Current** |
 | PostgreSQL + pgvector | **Current**: schema + extension enabled; no vector data |
 | Embedding Layer | **Future** |
 | Retrieval (vector similarity search) | **Future** |
@@ -26,7 +27,7 @@ Browser Extension → Privacy Filter → Backend → PostgreSQL + pgvector → E
 
 ---
 
-# CURRENT IMPLEMENTATION (Day 1)
+# CURRENT IMPLEMENTATION (Days 1-2)
 
 ## Components
 
@@ -70,10 +71,8 @@ This costs two extra unique constraints on the parent tables.
 
 **No duplicate pages.** `UNIQUE (user_id, canonical_url)` on `pages` is the de-duplication key.
 Repeat visits, from any device, are new `browsing_events` rows pointing at the same page.
-Trade-offs: (a) `canonical_url` is limited to 2048 characters so the btree entry stays within
-PostgreSQL's index size limit, so ingestion must normalise/truncate over-long URLs; (b) *how* URLs
-are normalised (tracking parameters, fragments, trailing slashes) is deliberately left to the
-ingestion work, so today `canonical_url` is simply whatever the caller supplies.
+`canonical_url` is limited to 2048 characters so the btree entry stays within PostgreSQL's index size
+limit; the ingestion layer enforces that bound on the *normalised* URL (see "Ingestion" below).
 
 **`browsing_events.page_id` is nullable.** An observation may exist without a stored page (for
 example, when a later privacy rule says not to keep page content).
@@ -95,6 +94,119 @@ Every index leads with the ownership or device column, so queries are always use
 
 **`updated_at`** is maintained by the ORM (`onupdate=now()`). Raw SQL updates would bypass it; a
 database trigger can be added if raw writes become common.
+
+## Ingestion (Day 2)
+
+```
+POST /api/v1/capture      (development stage: NOT authenticated)
+   → validation           Pydantic schema (app/schemas/capture.py)
+   → URL normalisation    app/core/urls.py         (pure functions)
+   → device ownership     the (user_id, device_id) pair must exist
+   → page upsert          INSERT … ON CONFLICT (user_id, canonical_url) DO UPDATE
+   → event insert         always a new browsing_events row
+   → COMMIT               app/services/ingestion.py owns the transaction
+```
+
+**Module boundaries.** `app/core/urls.py` is pure (no I/O, standard library only). `app/schemas/`
+holds the HTTP contract, kept separate from the ORM models. `app/services/ingestion.py` is the only
+place that writes pages and events. `app/api/` translates HTTP to and from the service and maps
+failures to safe responses (`app/api/errors.py`). There is no repository layer: the service uses the
+SQLAlchemy session directly.
+
+### Why `pages` and `browsing_events` are separate
+
+They answer different questions. A **page** is *what* the user has seen: one durable thing per
+(user, canonical URL) that will later carry extracted text and embeddings. An **event** is *when,
+where and how often*: an append-only observation with a device, a timestamp and a session. Merging
+them would either duplicate page-level data (text, and later embeddings) on every visit, or throw
+away the visit history that temporal ranking, session detection and drift analysis need.
+
+### Why the canonical URL is the page identity
+
+Retrieval must return one result for "that article", not one per campaign link. Identity is
+`(user_id, canonical_url)`: per user, so users never share or leak pages, and independent of device,
+so a laptop and a phone visiting the same article converge on the same page. `pages.url` keeps the
+first observed (normalised) URL; the two columns can diverge later if a canonical URL is inferred
+from page content, which is future work.
+
+### Why repeated visits become events
+
+A revisit is information (recency, frequency, which device, which session) but is not a new
+document. So a repeat visit reuses the page and inserts an event. On each visit the page's metadata
+is updated in the same statement: `first_seen_at` = the earliest event, `last_seen_at` = the latest
+(correct even when a device syncs late and events arrive out of order), the title follows the most
+recent visit that has one (a missing title never erases a known one), and `updated_at` is bumped.
+
+### Normalisation policy (`app/core/urls.py`) and why it is conservative
+
+A wrongly merged pair of pages loses information permanently; a missed merge only leaves a
+duplicate that later work can reconcile. So the rules only merge URLs that are equivalent by the
+URL standards, or that differ solely in well-known tracking noise:
+
+| Rule | Decision |
+|---|---|
+| Scheme | `http`/`https` only (lowercased); anything else is rejected |
+| Credentials in URL (`user:pass@`) | rejected, never stored |
+| Host | lowercased, IDNA/punycode encoded, one trailing dot removed |
+| Port | default (80/443) dropped; other ports kept |
+| Fragment | removed (trade-off: hash-routed single-page apps collapse into one page) |
+| Empty path | becomes `/` |
+| **Trailing slash** | **preserved.** `/docs` and `/docs/` stay distinct: servers may treat them differently, so merging risks a wrong merge. Only the empty path is rewritten |
+| Tracking parameters | `utm_source/medium/campaign/term/content/id`, `gclid`, `fbclid`, `dclid`, `gbraid`, `wbraid`, `msclkid`, `yclid`, `mc_cid`, `mc_eid`; removed everywhere they occur, case-insensitively |
+| Other query parameters | **kept** with their order, duplicates, `+` and empty values (`?page=2`, `?id=123`, `?search=vector+database` are meaningful) |
+| Percent-encoding | escapes of unreserved characters decoded (`%7E` → `~`), other hex upper-cased, non-ASCII/space/stray `%` escaped as UTF-8; reserved characters are never decoded (`%2F` ≠ `/`) |
+| Not done | sorting query parameters, resolving `..` segments, changing path/query case, stripping `www.`, upgrading `http` to `https`, following redirects, reading `<link rel=canonical>` |
+
+`extract_domain()` returns the hostname only. Organisational grouping (`docs.python.org` →
+`python.org`) needs the public-suffix list and is deliberately not attempted; the function is a
+single replaceable seam.
+
+### How PostgreSQL prevents duplicate pages
+
+The service never checks "does this page exist?" in Python. It issues one statement,
+`INSERT … ON CONFLICT (user_id, canonical_url) DO UPDATE … RETURNING …`, and PostgreSQL's unique
+index arbitrates. If several requests race to create the same page, one insert wins, the others
+wait for it to commit and then update the same row, and every request gets the same `page_id`. There
+are no application locks, and no read-then-write window. A test runs eight real concurrent
+requests and asserts exactly one page and eight events.
+
+`RETURNING (xmax = 0)` tells the caller whether the row was inserted or updated (`page_created`). It
+is a widely used PostgreSQL idiom rather than a documented API, so it is confined to one place and
+covered by tests.
+
+### Transactions and failure handling
+
+The device check, page upsert and event insert commit together or roll back together, so a failure
+never leaves a page without its event. Failures map to safe responses (`app/api/errors.py`): unknown
+or foreign device → 404 (one error for both, so ids cannot be probed), unexpected integrity failure
+→ 409, database unreachable → 503, anything else → 500, all in one JSON envelope. The engine is
+created with `hide_parameters=True`, so bound values such as URLs and titles never appear in
+exception text or logs, and the service logs identifiers only, never URLs.
+
+### Why authentication is intentionally deferred
+
+Authentication needs decisions that do not belong in an ingestion primitive: how a device proves
+its identity, how devices are registered and paired to a user, token lifetime and revocation.
+Designing them before the extension exists would be guesswork. Until then the endpoint accepts
+caller-supplied `user_id`/`device_id`, which means **anyone who can reach the port can write events
+for any user**. It is a development-stage boundary, to be run only on a trusted machine or
+network. Ownership *consistency* (a device really belongs to that user) is checked, but it is not
+authentication.
+
+### How ingestion will feed embeddings and retrieval (future)
+
+Nothing here extracts text or computes embeddings. What ingestion provides is the stable input for
+them: `pages` is the unit that will be embedded (one row per user and canonical URL, with
+`extracted_text` reserved for the content), `page_created`/`last_seen_at` show which pages are new or
+revisited, and `browsing_events` supplies the temporal signal (recency, frequency, device, session)
+for ranking. Embeddings will hang off `pages`, as described under "Vector storage".
+
+### Known limits
+
+- No idempotency key: a client retrying after a timeout can create a duplicate event.
+- Normalisation cannot know that two different URLs serve the same content (e.g. sorted vs.
+  unsorted parameters, or a site that ignores a parameter).
+- Nothing is fetched, so the title and URL are whatever the client reported.
 
 ## Vector storage (pgvector)
 
@@ -145,7 +257,7 @@ user. **How** a device authenticates and syncs is future work; there is no authe
 1. **Browser extension** captures permitted activity (URL, title, timestamp).
 2. **Privacy filter** runs *in the extension, before upload*: exclusion lists, no private/Incognito
    windows by default, stripping sensitive URL parts.
-3. **Ingestion API** with authentication and device registration; URL normalisation; page upsert.
+3. **Authentication and device registration** for the capture API, plus event idempotency.
 4. **Embedding layer**: page text → vectors, stored in pgvector (see above).
 5. **Retrieval**: natural-language query → user-scoped vector similarity search.
 6. **Temporal/session ranking**: recency, sessions, co-visitation.

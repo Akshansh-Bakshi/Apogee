@@ -42,16 +42,41 @@ Apogee should:
   `.env` is git-ignored.
 - **The health endpoint exposes no user data** and hides connection details in error responses.
 
+## Server-side validation (Day 2)
+
+`POST /api/v1/capture` adds a first server-side layer. It is **defence in depth only**: the browser
+extension (future) must filter *before upload*, so the server never receives what it must not keep.
+
+- **Only known fields are accepted.** Any other key (cookies, passwords, tokens, form values, browser
+  storage, page text, ...) is rejected with `422`, not ignored. The request has no field in which
+  such data could be stored.
+- **Only `http`/`https` URLs** are accepted; `javascript:`, `data:`, `file:`, `chrome:` and the rest
+  are rejected.
+- **URLs with embedded credentials** (`https://user:pass@host/`) are rejected.
+- **Fragments and known tracking parameters are removed** before anything is stored, and **the raw
+  URL is never persisted**: events and pages hold only the normalised URL. (Fragments can carry
+  tokens, e.g. OAuth implicit-flow responses.)
+- **Timestamps** must carry a timezone and be plausible (not before 2000, not in the future), and
+  titles are length-limited and free of NUL characters.
+- **Error responses never echo the request.** Validation errors report where and why, not the
+  submitted values; server errors are generic.
+- **Logging.** The service logs identifiers and counts only, never URLs or titles. The database
+  engine hides bound parameters, so URLs and titles do not appear in SQLAlchemy exception text or
+  logs. Server-side tracebacks for unexpected errors still include exception messages.
+
 ## Known gaps and risks (to be addressed by future work)
 
-- **URLs can contain secrets** (magic-login links, OAuth codes, session ids in query strings). The
-  schema stores the URL as given, so the extension's privacy filter must strip or drop such URLs
-  *before upload*, and the server's URL normalisation should act as a second line of defence.
+- **URLs can still contain secrets.** The server drops fragments, embedded credentials and known
+  *tracking* parameters, but it cannot know which arbitrary query parameters are sensitive: a
+  magic-login link (`?token=...`) or a session id in a path or query is stored as sent. The
+  extension's privacy filter must drop or strip such URLs *before upload*.
 - **Partial deletion leaves orphans.** Deleting events by time range or domain does not by itself
   delete a `pages` row that no longer has any events (and would keep its title and extracted text).
   A deletion service will need to remove such pages.
 - **Backups and logs.** Database backups, write-ahead logs and any application logs may retain
   deleted data for their retention period; a deletion policy must cover them.
-- **No authentication yet.** Until authentication exists, the backend must only be run on a trusted
-  machine and network. The development compose file binds ports to `127.0.0.1` for that reason.
+- **No authentication yet.** `POST /api/v1/capture` trusts the `user_id` and `device_id` it is
+  given, so anyone who can reach the port can write events for any user. Until authentication
+  exists, run the backend only on a trusted machine and network. The development compose file
+  binds ports to `127.0.0.1` for that reason.
 - **Transport and storage encryption** are not addressed at this stage.

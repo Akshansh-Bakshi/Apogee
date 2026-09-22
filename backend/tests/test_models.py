@@ -4,21 +4,14 @@ import uuid
 from dataclasses import dataclass
 
 import pytest
-from sqlalchemy import Engine, delete, func, select
+from sqlalchemy import Engine, delete, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.models import BrowsingEvent, Device, Page, User
-from tests.factories import T0, hours, make_device, make_event, make_page, make_user
+from tests.factories import T0, count, hours, make_device, make_event, make_page, make_user
 
 pytestmark = pytest.mark.db
-
-
-def count(session: Session, model: type, **filters: object) -> int:
-    statement = select(func.count()).select_from(model)
-    for column, value in filters.items():
-        statement = statement.where(getattr(model, column) == value)
-    return session.scalar(statement) or 0
 
 
 # --- basic row behaviour ----------------------------------------------------------------------

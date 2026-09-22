@@ -4,10 +4,12 @@ import uuid
 from datetime import UTC, datetime, timedelta
 from urllib.parse import urlsplit
 
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.config import Settings
 from app.models import BrowsingEvent, Device, Page, User
+from app.schemas.capture import CaptureRequest
 
 T0 = datetime(2026, 1, 1, 12, 0, tzinfo=UTC)
 
@@ -90,3 +92,29 @@ def make_event(
 
 def hours(n: int) -> timedelta:
     return timedelta(hours=n)
+
+
+def count(session: Session, model: type, **filters: object) -> int:
+    statement = select(func.count()).select_from(model)
+    for column, value in filters.items():
+        statement = statement.where(getattr(model, column) == value)
+    return session.scalar(statement) or 0
+
+
+def make_capture_request(
+    user: User,
+    device: Device,
+    url: str = "https://example.com/article",
+    *,
+    title: str | None = "An article",
+    at: datetime = T0,
+    session_id: uuid.UUID | None = None,
+) -> CaptureRequest:
+    return CaptureRequest(
+        user_id=user.id,
+        device_id=device.id,
+        url=url,
+        title=title,
+        occurred_at=at,
+        session_id=session_id,
+    )
