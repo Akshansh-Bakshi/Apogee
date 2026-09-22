@@ -1,0 +1,54 @@
+# Local development stack: PostgreSQL (with pgvector) + the FastAPI backend.
+#
+# Run from the repository root so the relative paths below resolve, and pass the env file
+# explicitly (Compose otherwise looks for .env next to this file):
+#
+#   docker compose --env-file .env -f infrastructure/docker-compose.yml up -d
+#
+# All credentials come from .env (copy .env.example). Nothing secret is defined in this file.
+
+name: apogee
+
+x-database-env: &database-env
+  POSTGRES_USER: ${POSTGRES_USER:?Set POSTGRES_USER in .env}
+  POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+  POSTGRES_DB: ${POSTGRES_DB:?Set POSTGRES_DB in .env}
+
+services:
+  db:
+    # PostgreSQL 16 with the pgvector extension binaries preinstalled. The extension is *enabled*
+    # by the Alembic migration, not by an init script.
+    image: pgvector/pgvector:pg16
+    environment:
+      <<: *database-env
+    ports:
+      # Bound to loopback only; the database is not exposed to the network.
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  backend:
+    build:
+      context: ../backend
+    command: >
+      uvicorn app.main:create_app --factory --host 0.0.0.0 --port 8000 --reload
+    environment:
+      <<: *database-env
+      ENVIRONMENT: development
+      POSTGRES_HOST: db          # the compose service name, not localhost
+      POSTGRES_PORT: "5432"      # container-internal port
+    volumes:
+      - ../backend:/app          # live code reload during development
+    ports:
+      - "127.0.0.1:8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  pgdata:

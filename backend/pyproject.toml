@@ -1,0 +1,11 @@
+# Tool configuration only. Dependencies live in requirements.txt / requirements-dev.txt
+# (the backend is run from source, not installed as a package).
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-ra"
+markers = [
+    "db: needs a running PostgreSQL server with pgvector (see README). Deselect with -m 'not db'.",
+]
