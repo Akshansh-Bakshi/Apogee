@@ -27,7 +27,7 @@ Browser Extension → Privacy Filter → Backend → PostgreSQL + pgvector → E
 
 ---
 
-# CURRENT IMPLEMENTATION (Days 1-2)
+# CURRENT IMPLEMENTATION (Days 1-3)
 
 ## Components
 
@@ -208,6 +208,61 @@ for ranking. Embeddings will hang off `pages`, as described under "Vector storag
   unsorted parameters, or a site that ignores a parameter).
 - Nothing is fetched, so the title and URL are whatever the client reported.
 
+## Content processing (Day 3)
+
+```
+capture with content
+   → clean_text()     app/core/content.py   (pure; whitespace, boilerplate, dedup, length floor)
+   → chunk_text()      app/core/content.py   (pure; fixed-size, overlapping, deterministic)
+   → _replace_chunks() app/services/ingestion.py   (atomic with the page/event write)
+```
+
+**Cleaning is a short list of heuristics, not an NLP pipeline**: normalise line endings and
+whitespace, collapse blank-line runs, drop lines that exactly match a small case-insensitive
+boilerplate list ("menu", "sign in", "accept all cookies", ...), collapse immediately repeated
+lines, and reject content that is empty or still very short afterwards (see
+`MIN_CLEANED_TEXT_LENGTH`). Rejection is a `422`, exactly like an invalid URL, not a silent no-op:
+a broken extraction should be visible to the caller, not stored as a near-empty page.
+
+**Chunking is fixed-size, overlapping windows of the cleaned text**, moving with a constant step
+(`chunk_size - overlap`). This is deliberately not word- or sentence-aware: for text meant to be
+embedded later, an occasional mid-word chunk boundary is an acceptable trade-off for an algorithm
+that is trivially deterministic and easy to verify by hand. Every chunk records its index (0-based,
+stable order within the page) and its character offsets into the cleaned text.
+
+**Why a separate `page_chunks` table rather than a column on `pages`.** `pages.extracted_text`
+exists as a placeholder from Day 1 but is intentionally never written to: storing one giant blob
+would have to be re-chunked at query time, and every visit would rewrite it even when nothing about
+the *chunking* changed. `page_chunks` is normalized instead: one row per chunk, `UNIQUE (page_id,
+chunk_index)`, `ON DELETE CASCADE` from `pages`. It carries no `user_id` of its own — a chunk is
+only ever reachable through its page, which already belongs to exactly one user.
+
+**A capture with content replaces that page's chunks, atomically.** `ingest_browsing_event` deletes
+a page's existing chunks and inserts the freshly computed ones in the same transaction as the page
+upsert and event insert (see `_replace_chunks`); all of it commits or rolls back together. A page's
+chunks therefore always reflect its most recently captured content — they are not an accumulating
+history of every visit's text. A capture with **no** `content` (the Day 2 case: a plain revisit)
+never touches `page_chunks` at all, so re-visiting a page without re-sending its text does not
+erase what was already extracted.
+
+**Client-side capture and privacy filtering** live in `extension/` (a Manifest V3 Chrome
+extension): a content script that extracts visible text on request, a popup with a manual "Capture
+this page" button (no autonomous/always-on capture yet), and a pure, configurable domain-exclusion
+filter that runs *before* anything is extracted or sent — see `extension/README.md` and
+docs/privacy.md ("Client-side capture"). The filter fails closed: an unparseable URL, or any
+non-http(s) page, is never captured.
+
+### Known limits
+
+- `pages.extracted_text` remains an unused placeholder column; real extracted text lives in
+  `page_chunks.text`. It may be repurposed or removed later.
+- Cleaning is structural only: it does not detect or redact sensitive information *within* the
+  text (see docs/privacy.md).
+- Chunk size/overlap are process-wide constants (`app/core/content.py`), not per-request.
+- The extension's host permissions for the API origin are static in `manifest.json`; changing the
+  configured API base URL in settings without also updating `manifest.json` will fail at fetch time
+  due to the browser's cross-origin rules.
+
 ## Vector storage (pgvector)
 
 **Today: the extension is enabled, and no vector column exists.** This is deliberate.
@@ -254,11 +309,14 @@ user. **How** a device authenticates and syncs is future work; there is no authe
 
 # FUTURE COMPONENTS (not implemented)
 
-1. **Browser extension** captures permitted activity (URL, title, timestamp).
-2. **Privacy filter** runs *in the extension, before upload*: exclusion lists, no private/Incognito
-   windows by default, stripping sensitive URL parts.
+1. **Always-on/autonomous capture.** The Day 3 extension only captures on a manual click; capturing
+   automatically as the user browses (with its own privacy implications) is future work.
+2. **Richer privacy filtering.** The Day 3 filter is a configurable excluded-domain list plus an
+   http(s)-only gate (see docs/privacy.md, "Client-side capture"); it does not yet redact sensitive
+   content *within* a captured page, manage exclusions from a dashboard, or detect Incognito beyond
+   Chrome's own default of not running extensions there.
 3. **Authentication and device registration** for the capture API, plus event idempotency.
-4. **Embedding layer**: page text → vectors, stored in pgvector (see above).
+4. **Embedding layer**: `page_chunks.text` → vectors, stored in pgvector (see above).
 5. **Retrieval**: natural-language query → user-scoped vector similarity search.
 6. **Temporal/session ranking**: recency, sessions, co-visitation.
 7. **ML ranking**: a model trained on relevance-labelled data.

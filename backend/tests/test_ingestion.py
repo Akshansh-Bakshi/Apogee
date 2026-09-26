@@ -9,7 +9,7 @@ import pytest
 from sqlalchemy import Engine, delete, select
 from sqlalchemy.orm import Session, sessionmaker
 
-from app.models import BrowsingEvent, Page, User
+from app.models import BrowsingEvent, Page, PageChunk, User
 from app.schemas.capture import CaptureRequest, CaptureResponse
 from app.services import ingestion
 from app.services.ingestion import DeviceNotFoundError, ingest_browsing_event
@@ -38,6 +38,14 @@ def events_of(session: Session, user: User) -> list[BrowsingEvent]:
     return list(
         session.scalars(
             select(BrowsingEvent).where(BrowsingEvent.user_id == user.id).order_by(BrowsingEvent.occurred_at)
+        )
+    )
+
+
+def chunks_of(session: Session, page: Page) -> list[PageChunk]:
+    return list(
+        session.scalars(
+            select(PageChunk).where(PageChunk.page_id == page.id).order_by(PageChunk.chunk_index)
         )
     )
 
@@ -357,3 +365,111 @@ def test_concurrent_captures_of_one_page_create_exactly_one_page(engine: Engine)
         with factory() as cleanup:
             cleanup.execute(delete(User).where(User.id == user_id))
             cleanup.commit()
+
+
+# --- content processing / chunk persistence -------------------------------------------------------
+
+SHORT_CONTENT = "x" * 500  # under the default chunk_size (1000): exactly one chunk
+LONG_CONTENT = "x" * 2500  # over one chunk: exactly three chunks under the default size/overlap
+
+
+def test_a_capture_without_content_processes_nothing(db_session: Session, owner) -> None:
+    user, device = owner
+
+    result = ingest_browsing_event(db_session, make_capture_request(user, device, ARTICLE, content=None))
+
+    assert result.content_processed is False
+    assert result.chunk_count == 0
+    (page,) = pages_of(db_session, user)
+    assert chunks_of(db_session, page) == []
+
+
+def test_a_capture_with_content_cleans_chunks_and_persists_them(db_session: Session, owner) -> None:
+    user, device = owner
+
+    result = ingest_browsing_event(db_session, make_capture_request(user, device, ARTICLE, content=LONG_CONTENT))
+
+    assert result.content_processed is True
+    assert result.chunk_count == 3
+    (page,) = pages_of(db_session, user)
+    chunks = chunks_of(db_session, page)
+    assert [c.chunk_index for c in chunks] == [0, 1, 2]
+    assert all(c.page_id == page.id for c in chunks)
+    assert chunks[0].char_start == 0
+    assert chunks[-1].char_end == len(LONG_CONTENT)
+    assert all(c.text == LONG_CONTENT[c.char_start : c.char_end] for c in chunks)
+
+
+def test_a_short_capture_produces_exactly_one_chunk(db_session: Session, owner) -> None:
+    user, device = owner
+
+    result = ingest_browsing_event(db_session, make_capture_request(user, device, ARTICLE, content=SHORT_CONTENT))
+
+    assert result.chunk_count == 1
+    (page,) = pages_of(db_session, user)
+    (chunk,) = chunks_of(db_session, page)
+    assert chunk.text == SHORT_CONTENT
+
+
+def test_recapturing_with_new_content_replaces_the_old_chunks(db_session: Session, owner) -> None:
+    user, device = owner
+
+    ingest_browsing_event(db_session, make_capture_request(user, device, ARTICLE, content=SHORT_CONTENT, at=T0))
+    ingest_browsing_event(
+        db_session, make_capture_request(user, device, ARTICLE, content=LONG_CONTENT, at=T0 + hours(1))
+    )
+
+    (page,) = pages_of(db_session, user)
+    chunks = chunks_of(db_session, page)
+    assert len(chunks) == 3  # LONG_CONTENT's shape, not SHORT_CONTENT's
+    assert count(db_session, PageChunk, page_id=page.id) == 3  # nothing left over from the first capture
+
+
+def test_recapturing_without_content_leaves_existing_chunks_untouched(db_session: Session, owner) -> None:
+    user, device = owner
+
+    ingest_browsing_event(db_session, make_capture_request(user, device, ARTICLE, content=SHORT_CONTENT, at=T0))
+    result = ingest_browsing_event(
+        db_session, make_capture_request(user, device, ARTICLE, content=None, at=T0 + hours(1))
+    )
+
+    assert result.content_processed is False
+    (page,) = pages_of(db_session, user)
+    (chunk,) = chunks_of(db_session, page)
+    assert chunk.text == SHORT_CONTENT  # the earlier capture's chunk is still there
+
+
+def test_chunks_are_only_reachable_through_their_own_page(db_session: Session) -> None:
+    alice, bob = make_user(db_session), make_user(db_session)
+    alices_device, bobs_device = make_device(db_session, alice), make_device(db_session, bob)
+    db_session.commit()
+
+    ingest_browsing_event(db_session, make_capture_request(alice, alices_device, ARTICLE, content=SHORT_CONTENT))
+    ingest_browsing_event(db_session, make_capture_request(bob, bobs_device, ARTICLE, content=LONG_CONTENT))
+
+    (alices_page,) = pages_of(db_session, alice)
+    (bobs_page,) = pages_of(db_session, bob)
+    assert {c.page_id for c in chunks_of(db_session, alices_page)} == {alices_page.id}
+    assert {c.page_id for c in chunks_of(db_session, bobs_page)} == {bobs_page.id}
+
+
+def test_a_failure_at_commit_rolls_back_the_page_event_and_chunks_together(
+    db_session: Session, owner, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    user, device = owner
+    original_commit = db_session.commit
+
+    def explode() -> None:
+        raise RuntimeError("simulated failure at commit time")
+
+    monkeypatch.setattr(db_session, "commit", explode)
+    try:
+        with pytest.raises(RuntimeError):
+            ingest_browsing_event(
+                db_session, make_capture_request(user, device, ARTICLE, content=SHORT_CONTENT)
+            )
+    finally:
+        monkeypatch.setattr(db_session, "commit", original_commit)
+
+    assert count(db_session, Page, user_id=user.id) == 0
+    assert count(db_session, PageChunk) == 0

@@ -29,6 +29,12 @@ def capture(payload: CaptureRequest, session: DbSession) -> CaptureResponse:
     is new or was reused. The stored URL is the *normalised* one: fragment and tracking parameters
     are dropped and the raw URL is never persisted.
 
+    The optional ``content`` field carries the page's visible text (typically from the browser
+    extension). When present it is cleaned and split into deterministic chunks, which replace any
+    chunks stored from an earlier capture of the same page; ``content_processed``/``chunk_count``
+    in the response reflect this. A plain revisit with no ``content`` behaves exactly as in Day 2
+    and never touches stored chunks.
+
     **Development-stage boundary, not an authenticated production endpoint.** The caller supplies
     `user_id` and `device_id` and nothing verifies who they are, so anyone who can reach this port
     can write events for any user. Authentication is deliberately deferred; do not expose this

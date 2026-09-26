@@ -1,6 +1,8 @@
 """Migrations: a fresh database is fully initialised, is reversible, and matches the models."""
 
 import pytest
+from alembic.config import Config
+from alembic.script import ScriptDirectory
 from alembic.autogenerate import compare_metadata
 from alembic.migration import MigrationContext
 from sqlalchemy import Engine, inspect, text
@@ -9,7 +11,7 @@ import app.models  # noqa: F401  (registers models on Base.metadata)
 from app.core.config import Settings
 from app.db.base import Base
 from app.db.session import create_db_engine
-from tests.db_utils import downgrade, temporary_database, upgrade
+from tests.db_utils import ALEMBIC_INI, downgrade, temporary_database, upgrade
 
 pytestmark = pytest.mark.db
 
@@ -42,7 +44,8 @@ def test_fresh_database_is_initialised_by_migrations(engine: Engine) -> None:
 
     with engine.connect() as connection:
         version = connection.scalar(text("SELECT version_num FROM alembic_version"))
-    assert version == "0001"
+    migration_head = ScriptDirectory.from_config(Config(str(ALEMBIC_INI))).get_current_head()
+    assert version == migration_head
 
 
 def test_migration_enables_the_pgvector_extension(engine: Engine) -> None:

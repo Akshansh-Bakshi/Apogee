@@ -12,7 +12,7 @@ from sqlalchemy.orm import sessionmaker
 
 from app.core.config import Settings
 from app.main import create_app
-from app.models import BrowsingEvent, Page, User
+from app.models import BrowsingEvent, Page, PageChunk, User
 from app.services.ingestion import IngestionConflictError
 from tests.factories import count, make_device, make_settings, make_user
 
@@ -24,6 +24,7 @@ CANONICAL = "https://example.com/tutorial?id=42"
 RESPONSE_FIELDS = {
     "event_id", "page_id", "page_created", "canonical_url", "domain",
     "title", "first_seen_at", "last_seen_at", "occurred_at",
+    "content_processed", "chunk_count",
 }  # fmt: skip
 
 
@@ -303,6 +304,57 @@ def test_a_rejected_request_writes_nothing(
     owner = make_owner()
 
     response = client.post(ENDPOINT, json=body(owner, url="ftp://example.com/x"))
+
+    assert response.status_code == 422
+    assert rows(engine, Page, user_id=owner.user_id) == 0
+    assert rows(engine, BrowsingEvent, user_id=owner.user_id) == 0
+
+
+@pytest.mark.db
+def test_a_capture_with_content_is_cleaned_and_chunked(
+    client: TestClient, engine: Engine, make_owner: Callable[[], Owner]
+) -> None:
+    owner = make_owner()
+    content = "This paragraph of visible page text is long enough to survive cleaning easily. " * 5
+
+    response = client.post(ENDPOINT, json=body(owner, content=content))
+
+    assert response.status_code == 201
+    result = response.json()
+    assert result["content_processed"] is True
+    assert result["chunk_count"] >= 1
+    assert rows(engine, PageChunk, page_id=uuid.UUID(result["page_id"])) == result["chunk_count"]
+
+
+@pytest.mark.db
+def test_a_capture_without_content_processes_nothing(
+    client: TestClient, engine: Engine, make_owner: Callable[[], Owner]
+) -> None:
+    owner = make_owner()
+
+    response = client.post(ENDPOINT, json=body(owner))
+
+    assert response.status_code == 201
+    result = response.json()
+    assert result["content_processed"] is False
+    assert result["chunk_count"] == 0
+    assert rows(engine, PageChunk, page_id=uuid.UUID(result["page_id"])) == 0
+
+
+def test_near_empty_content_is_rejected_with_a_safe_422(offline_client: TestClient, stranger: Owner) -> None:
+    response = offline_client.post(ENDPOINT, json=body(stranger, content="hi"))
+
+    assert response.status_code == 422
+    assert response.json()["error"]["details"][0]["loc"] == ["body", "content"]
+
+
+@pytest.mark.db
+def test_a_capture_rejected_for_its_content_writes_nothing(
+    client: TestClient, engine: Engine, make_owner: Callable[[], Owner]
+) -> None:
+    owner = make_owner()
+
+    response = client.post(ENDPOINT, json=body(owner, content="   "))
 
     assert response.status_code == 422
     assert rows(engine, Page, user_id=owner.user_id) == 0

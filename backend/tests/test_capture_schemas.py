@@ -6,7 +6,7 @@ from datetime import UTC, datetime, timedelta
 import pytest
 from pydantic import ValidationError
 
-from app.schemas.capture import MAX_TITLE_LENGTH, CaptureRequest
+from app.schemas.capture import MAX_RAW_CONTENT_LENGTH, MAX_TITLE_LENGTH, CaptureRequest
 
 USER_ID = "6f1f7d2e-3b8a-4c55-9a1e-0d3f5a7b9c11"
 DEVICE_ID = "0a9c1b2d-4e5f-4a6b-8c7d-1e2f3a4b5c6d"
@@ -167,6 +167,48 @@ def test_sensitive_or_unknown_fields_are_rejected_not_ignored(extra: dict[str, o
         CaptureRequest(**payload(**extra))
 
     assert {error["type"] for error in excinfo.value.errors()} == {"extra_forbidden"}
+
+
+def test_content_is_optional() -> None:
+    assert CaptureRequest(**payload()).content is None
+
+
+def test_valid_content_is_accepted_and_kept_raw_on_the_request() -> None:
+    text = "This is a perfectly normal paragraph of visible page text, well over the minimum length."
+    request = CaptureRequest(**payload(content=text))
+
+    assert request.content == text  # kept raw here; cleaning happens in the ingestion service
+
+
+@pytest.mark.parametrize(
+    "bad_content",
+    [
+        "",
+        "   \n\t  ",
+        "hi",  # far below the minimum cleaned length
+        "Menu\nHome\nSearch\nSign in",  # entirely boilerplate; nothing survives cleaning
+    ],
+)
+def test_empty_or_near_empty_content_is_rejected(bad_content: str) -> None:
+    with pytest.raises(ValidationError) as excinfo:
+        CaptureRequest(**payload(content=bad_content))
+
+    assert error_locations(excinfo) == {("content",)}
+
+
+def test_content_over_the_length_limit_is_rejected() -> None:
+    with pytest.raises(ValidationError) as excinfo:
+        CaptureRequest(**payload(content="a" * (MAX_RAW_CONTENT_LENGTH + 1)))
+
+    assert error_locations(excinfo) == {("content",)}
+
+
+def test_content_error_messages_do_not_echo_the_content() -> None:
+    with pytest.raises(ValidationError) as excinfo:
+        CaptureRequest(**payload(content="SECRET-but-too-short"))
+
+    messages = " ".join(error["msg"] for error in excinfo.value.errors())
+    assert "SECRET" not in messages
 
 
 def test_requests_are_immutable() -> None:

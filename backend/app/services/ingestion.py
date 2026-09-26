@@ -13,13 +13,14 @@ This module owns the transaction: it commits on success and rolls back on any fa
 import logging
 import uuid
 
-from sqlalchemy import Row, case, func, literal_column, select
+from sqlalchemy import Row, case, delete, func, literal_column, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.core.content import Chunk, chunk_text, clean_text
 from app.core.urls import extract_domain, normalize_url
-from app.models import BrowsingEvent, Device, Page
+from app.models import BrowsingEvent, Device, Page, PageChunk
 from app.schemas.capture import CaptureRequest, CaptureResponse
 
 logger = logging.getLogger(__name__)
@@ -46,6 +47,15 @@ def ingest_browsing_event(session: Session, request: CaptureRequest) -> CaptureR
         _require_device(session, request)
         page = _upsert_page(session, request, canonical_url, domain)
         event_id = _insert_event(session, request, page.id, canonical_url, domain)
+        if request.content is not None:
+            # Already validated by the schema; re-cleaning here is a pure, deterministic repeat of
+            # that same check (see CaptureRequest._content_must_be_capturable), not a new decision.
+            cleaned = clean_text(request.content)
+            chunks = chunk_text(cleaned)
+            _replace_chunks(session, page.id, chunks)
+            content_processed, chunk_count = True, len(chunks)
+        else:
+            content_processed, chunk_count = False, 0
         session.commit()
     except IntegrityError as exc:
         session.rollback()
@@ -56,8 +66,11 @@ def ingest_browsing_event(session: Session, request: CaptureRequest) -> CaptureR
         session.rollback()
         raise
 
-    # Deliberately IDs and a flag only: never the URL, which may contain sensitive query values.
-    logger.info("Captured event %s for page %s (page_created=%s)", event_id, page.id, page.created)
+    # Deliberately IDs and counts only: never the URL or text, which may be sensitive.
+    logger.info(
+        "Captured event %s for page %s (page_created=%s, chunk_count=%s)",
+        event_id, page.id, page.created, chunk_count,
+    )
     return CaptureResponse(
         event_id=event_id,
         page_id=page.id,
@@ -68,6 +81,8 @@ def ingest_browsing_event(session: Session, request: CaptureRequest) -> CaptureR
         first_seen_at=page.first_seen_at,
         last_seen_at=page.last_seen_at,
         occurred_at=request.occurred_at,
+        content_processed=content_processed,
+        chunk_count=chunk_count,
     )
 
 
@@ -138,6 +153,22 @@ def _insert_event(
     session.add(event)
     session.flush()  # surfaces constraint violations here, inside the try block
     return event.id
+
+
+def _replace_chunks(session: Session, page_id: uuid.UUID, chunks: list[Chunk]) -> None:
+    """Replace all of a page's chunks with freshly computed ones, atomically with the rest.
+
+    A page's chunks always reflect its most recently captured content: recapturing the same page
+    with content replaces its chunks rather than appending to them, so a page never accumulates
+    stale text from earlier visits.
+    """
+    session.execute(delete(PageChunk).where(PageChunk.page_id == page_id))
+    session.add_all(
+        PageChunk(page_id=page_id, chunk_index=chunk.index, text=chunk.text,
+                  char_start=chunk.start, char_end=chunk.end)
+        for chunk in chunks
+    )
+    session.flush()  # surfaces constraint violations here, inside the try block
 
 
 def _constraint(exc: IntegrityError) -> str | None:

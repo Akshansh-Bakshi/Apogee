@@ -8,37 +8,47 @@ using semantic embeddings, temporal/session context, and a learned ranking model
 in a backend and database that *you* run. Multiple devices will feed one user account. Privacy
 controls are a first-class requirement, not an afterthought (see [docs/privacy.md](docs/privacy.md)).
 
-## Current scope: Days 1-2 (backend foundation + first ingestion layer)
+## Current scope: Days 1-3 (backend foundation + ingestion + first vertical slice)
 
-This repository contains the infrastructure the later ML and retrieval work sits on, and the first
-reliable path for data to get into it:
+This repository contains the infrastructure the later ML and retrieval work sits on, a reliable
+path for data to get into it, and now a minimal end-to-end path from a real browser tab to stored,
+chunked text:
 
 - FastAPI application: `GET /api/v1/health` (really queries PostgreSQL) and
-  `POST /api/v1/capture` (records one browsing event; see [Ingestion flow](#ingestion-flow))
+  `POST /api/v1/capture` (records one browsing event, optionally with page text; see
+  [Ingestion flow](#ingestion-flow))
 - Pure, conservative URL normalisation and hostname extraction (`app/core/urls.py`)
-- Page upsert + event insert in one transaction, using PostgreSQL's `ON CONFLICT`
+- Page upsert + event insert (+ chunk persistence, when content is sent) in one transaction, using
+  PostgreSQL's `ON CONFLICT`
+- Text cleaning and deterministic chunking (`app/core/content.py`), stored in a `page_chunks` table
+- A minimal Chrome (Manifest V3) extension: a manual "Capture this page" button, a client-side
+  privacy filter (excluded domains + http/https-only), and settings for the API URL and IDs (see
+  [extension/README.md](extension/README.md))
 - PostgreSQL + [pgvector](https://github.com/pgvector/pgvector), via Docker Compose
-- SQLAlchemy 2.x models and an Alembic migration for `users`, `devices`, `pages`, `browsing_events`
+- SQLAlchemy 2.x models and two Alembic migrations: `users`/`devices`/`pages`/`browsing_events`,
+  then `page_chunks`
 - Environment-based configuration (no credentials in code)
-- pytest suite (pure unit tests + tests against a real PostgreSQL)
-- Documentation: this file, [docs/architecture.md](docs/architecture.md), [docs/privacy.md](docs/privacy.md)
+- pytest suite (pure unit tests + tests against a real PostgreSQL) and a Node test suite for the
+  extension's pure logic
+- Documentation: this file, [docs/architecture.md](docs/architecture.md), [docs/privacy.md](docs/privacy.md),
+  [extension/README.md](extension/README.md)
 
 ### Not implemented yet
 
-Browser extension and capture, client-side privacy filtering and exclusion management, **authentication
-and device registration/sync** (the capture endpoint is an unauthenticated development-stage boundary),
-page content/text extraction, embeddings, semantic search / vector retrieval, temporal or session
-scoring, learned ranking, clustering / drift analysis, and the dashboard. `extension/`, `dashboard/`
-and `ml/` contain only a README marking the project boundary. See
+Always-on/autonomous capture (only a manual click today), authentication and device
+registration/sync (the capture endpoint is still an unauthenticated development-stage boundary and
+the extension stores its configured IDs unencrypted), embeddings, semantic search / vector
+retrieval, temporal or session scoring, learned ranking, clustering / drift analysis, and the
+dashboard. `dashboard/` and `ml/` still contain only a README marking the project boundary. See
 [docs/architecture.md](docs/architecture.md).
 
 ## Architecture at this stage
 
 ```
-   (future)                      CURRENT
- Browser extension  ──►   FastAPI  ──►  PostgreSQL 16 + pgvector
-                          /api/v1/capture   users · devices · pages · browsing_events
-                          /api/v1/health
+       CURRENT                        CURRENT
+ Browser extension          FastAPI  ──►  PostgreSQL 16 + pgvector
+ (manual capture only) ──►  /api/v1/capture   users · devices · pages
+                             /api/v1/health    browsing_events · page_chunks
 ```
 
 Data model in one line: a **user** owns many **devices**; a device produces **browsing events**;
@@ -205,9 +215,10 @@ curl -sS -X POST http://localhost:8000/api/v1/capture -H 'Content-Type: applicat
 | `title` | string \| null | optional; up to 1024 characters; whitespace is collapsed, blank means no title |
 | `occurred_at` | ISO-8601 timestamp | required; must include a timezone; not before 2000-01-01, not more than 5 minutes in the future |
 | `session_id` | UUID \| null | optional client-assigned session identifier |
+| `content` | string \| null | optional; the page's visible text, up to 300,000 characters raw; cleaned and chunked (see below) |
 
-**No other fields are accepted.** Cookies, passwords, tokens, form values, browser storage, page
-text, or anything else unknown is a `422`, not silently ignored.
+**No other fields are accepted.** Cookies, passwords, tokens, form values, browser storage, or
+anything else unknown is a `422`, not silently ignored.
 
 ### Response: `201 Created`
 
@@ -220,11 +231,17 @@ the page is new.
   "canonical_url": "https://example.com/tutorial?id=42", "domain": "example.com",
   "title": "A tutorial",
   "first_seen_at": "2026-01-01T12:00:00Z", "last_seen_at": "2026-01-01T12:00:00Z",
-  "occurred_at": "2026-01-01T12:00:00Z"
+  "occurred_at": "2026-01-01T12:00:00Z",
+  "content_processed": false, "chunk_count": 0
 }
 ```
 
-The stored URL is the normalised one; the raw URL (fragment, tracking parameters) is never persisted.
+The stored URL is the normalised one; the raw URL (fragment, tracking parameters) is never
+persisted. `content_processed`/`chunk_count` are `true`/`>0` only when the request included
+`content`: it is cleaned and split into fixed-size, overlapping chunks (`app/core/content.py`),
+which **replace** any chunks stored from an earlier capture of the same page — a page's chunks
+always reflect its most recently captured content, not an accumulating history. A capture with no
+`content` (a plain revisit) leaves previously stored chunks untouched.
 
 ### Errors
 
@@ -253,9 +270,11 @@ credentials: the app refuses to start without `POSTGRES_DB`, `POSTGRES_USER` and
 backend/        FastAPI app, Alembic migrations, tests
   app/api/        HTTP layer: routers (v1/health, v1/capture), dependencies, error handling
   app/schemas/    request/response contracts (Pydantic), separate from ORM models
-  app/services/   ingestion: the transaction that normalises, upserts the page, inserts the event
-  app/core/       configuration and pure utilities (URL normalisation)
-  app/db/  app/models/   engine/session, ORM models
+  app/services/   ingestion: the transaction that normalises, upserts the page, inserts the event,
+                   cleans/chunks/persists content
+  app/core/       configuration and pure utilities (URL normalisation, text cleaning/chunking)
+  app/db/  app/models/   engine/session, ORM models (incl. page_chunks)
+extension/      Chrome MV3 extension: manual capture, privacy filter, settings (see its own README)
 infrastructure/ docker-compose.yml
 docs/           architecture.md, privacy.md
 extension/ dashboard/ ml/   future components (README only)

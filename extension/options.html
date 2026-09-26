@@ -1,0 +1,41 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Apogee settings</title>
+  <style>
+    body { font: 13px system-ui, sans-serif; max-width: 480px; margin: 24px auto; }
+    label { display: block; margin-top: 12px; font-weight: 600; }
+    input, textarea { width: 100%; box-sizing: border-box; padding: 6px; font: 13px monospace; }
+    textarea { height: 120px; }
+    button { margin-top: 14px; padding: 8px 16px; }
+    p.hint { color: #555; font-size: 12px; margin: 4px 0 0; }
+    p.status { font-weight: 600; }
+  </style>
+</head>
+<body>
+  <h1>Apogee settings</h1>
+  <p class="hint">
+    There is no account system yet. Create a development user and device with the psql commands
+    in the backend README ("Try it"), then paste the two IDs below.
+  </p>
+
+  <label for="apiBaseUrl">API base URL</label>
+  <input id="apiBaseUrl" placeholder="http://127.0.0.1:8000" />
+
+  <label for="userId">User ID</label>
+  <input id="userId" placeholder="UUID" />
+
+  <label for="deviceId">Device ID</label>
+  <input id="deviceId" placeholder="UUID" />
+
+  <label for="excludedDomains">Excluded domains (one per line)</label>
+  <textarea id="excludedDomains"></textarea>
+  <p class="hint">A page on any of these domains, or any subdomain of one, is never captured.</p>
+
+  <button id="save">Save</button>
+  <p id="status" class="status"></p>
+
+  <script type="module" src="options.js"></script>
+</body>
+</html>

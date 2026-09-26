@@ -64,12 +64,40 @@ extension (future) must filter *before upload*, so the server never receives wha
   engine hides bound parameters, so URLs and titles do not appear in SQLAlchemy exception text or
   logs. Server-side tracebacks for unexpected errors still include exception messages.
 
+## Client-side capture (Day 3)
+
+A minimal Chrome (Manifest V3) extension (`extension/`) is the only thing that sends data to the
+backend today.
+
+- **Manual only.** Capture happens on a click of "Capture this page" in the popup. There is no
+  autonomous or always-on capture yet.
+- **What it captures**, and only on request from the popup: the current tab's URL, title,
+  timestamp, and visible text (extracted from the DOM; hidden and `aria-hidden` elements, and
+  `<script>`/`<style>`/`<noscript>`/`<template>`/`<iframe>` content, are excluded).
+- **What it never captures**: cookies, passwords, authentication tokens, form values, typed input,
+  or any browsing history beyond the single page the user chose to capture. The content script is
+  passive — it only reads the page when the popup explicitly asks it to.
+- **The privacy filter runs before anything is extracted**, in the popup, not the backend: a page
+  is checked against a configurable excluded-domain list (`extension/src/privacy.mjs`) and must be
+  `http`/`https` (not `chrome://`, `file://`, an extension page, etc.). An excluded or
+  non-http(s) page is never extracted, let alone sent. Matching is by hostname or subdomain and
+  fails closed: a URL the filter cannot parse is treated as excluded.
+- **Incognito is not captured.** Chrome does not run extensions in Incognito windows unless the
+  user explicitly enables "Allow in Incognito" for it; this extension does not request that, and
+  nothing in it changes that default.
+- **Configuration** (API base URL, user id, device id, excluded domains) is stored in
+  `chrome.storage.local`, unencrypted, on the user's own machine. There is still no login: whatever
+  user/device id is configured is trusted as-is by the backend (see "No authentication yet" below).
+
 ## Known gaps and risks (to be addressed by future work)
 
-- **URLs can still contain secrets.** The server drops fragments, embedded credentials and known
-  *tracking* parameters, but it cannot know which arbitrary query parameters are sensitive: a
-  magic-login link (`?token=...`) or a session id in a path or query is stored as sent. The
-  extension's privacy filter must drop or strip such URLs *before upload*.
+- **URLs, and now page text, can still contain secrets.** The server drops fragments, embedded
+  credentials and known *tracking* parameters, but it cannot know which arbitrary query parameters
+  are sensitive: a magic-login link (`?token=...`) or a session id in a path or query is stored as
+  sent. The same is true of captured text: `clean_text` normalises whitespace and boilerplate but
+  does not detect or redact sensitive content (API keys, personal data, etc.) that happens to be
+  visible on a page. Avoiding capture of such pages is the excluded-domain filter's job, run in the
+  extension *before* anything is extracted.
 - **Partial deletion leaves orphans.** Deleting events by time range or domain does not by itself
   delete a `pages` row that no longer has any events (and would keep its title and extracted text).
   A deletion service will need to remove such pages.
@@ -78,5 +106,7 @@ extension (future) must filter *before upload*, so the server never receives wha
 - **No authentication yet.** `POST /api/v1/capture` trusts the `user_id` and `device_id` it is
   given, so anyone who can reach the port can write events for any user. Until authentication
   exists, run the backend only on a trusted machine and network. The development compose file
-  binds ports to `127.0.0.1` for that reason.
+  binds ports to `127.0.0.1` for that reason. The extension does not change this trust model: it
+  simply stores a configured `user_id`/`device_id` locally and sends them unauthenticated, the same
+  as any other caller of the capture endpoint.
 - **Transport and storage encryption** are not addressed at this stage.

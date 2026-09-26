@@ -109,6 +109,7 @@ def make_capture_request(
     title: str | None = "An article",
     at: datetime = T0,
     session_id: uuid.UUID | None = None,
+    content: str | None = None,
 ) -> CaptureRequest:
     return CaptureRequest(
         user_id=user.id,
@@ -117,4 +118,5 @@ def make_capture_request(
         title=title,
         occurred_at=at,
         session_id=session_id,
+        content=content,
     )

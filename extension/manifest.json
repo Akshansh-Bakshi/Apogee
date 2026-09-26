@@ -1,0 +1,20 @@
+{
+  "manifest_version": 3,
+  "name": "Apogee Capture",
+  "version": "0.1.0",
+  "description": "Manually capture the page you're viewing into your Apogee personal web memory.",
+  "permissions": ["storage", "activeTab"],
+  "host_permissions": ["http://127.0.0.1:8000/*", "http://localhost:8000/*"],
+  "content_scripts": [
+    {
+      "matches": ["http://*/*", "https://*/*"],
+      "js": ["src/content-script.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Capture with Apogee"
+  },
+  "options_page": "options.html"
+}

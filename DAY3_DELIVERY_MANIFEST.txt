@@ -1,0 +1,155 @@
+APOGEE — Day 3 DELTA delivery manifest
+=======================================
+
+1. Baseline
+-----------
+This delta is produced against the Day 2 repository state: the Day 1 baseline
+(APOGEE-day1.zip, 44 files) with the Day 2 delta (APOGEE-day2-delta.zip, 21 files:
+11 created + 10 modified) overlaid on top, reconstructed and diffed byte-for-byte
+against the working Day 3 repository. It is a DELTA, not a standalone project:
+apply it on top of the Day 1 + Day 2 repository, preserving paths, rather than
+replacing anything.
+
+Day 3 adds exactly one new capability pair to the existing, unmodified Day 2
+architecture: (a) client-side capture via a Chrome MV3 extension, and (b) backend
+text cleaning, deterministic chunking, and PageChunk persistence, invoked through
+the SAME `POST /api/v1/capture` endpoint Day 2 built — no parallel/duplicate API
+was introduced. `backend/app/api/v1/capture.py`'s route, request/response model
+names, and status codes are unchanged from Day 2; only its docstring and the
+schema/response it references were extended.
+
+2. CREATED files (14)
+----------------------
+Backend:
+  backend/app/core/content.py                       — pure clean_text()/chunk_text()
+  backend/app/models/page_chunk.py                   — PageChunk ORM model
+  backend/migrations/versions/0002_add_page_chunks.py — Alembic migration (0001 -> 0002)
+  backend/tests/test_content_processing.py           — pure cleaning/chunking tests
+
+Extension (Chrome Manifest V3):
+  extension/manifest.json
+  extension/popup.html
+  extension/popup.js
+  extension/options.html
+  extension/options.js
+  extension/src/content-script.js
+  extension/src/privacy.mjs
+  extension/src/payload.mjs
+  extension/tests/privacy.test.mjs
+  extension/tests/payload.test.mjs
+
+3. MODIFIED files (12)
+------------------------
+  README.md                              — Day 1-3 scope, ingestion flow (content field,
+                                            content_processed/chunk_count), repo layout
+  docs/architecture.md                   — new "Content processing (Day 3)" section,
+                                            revised future-components list
+  docs/privacy.md                        — new "Client-side capture (Day 3)" section,
+                                            revised known-gaps bullets
+  extension/README.md                    — replaced the Day 1 placeholder with real docs
+  backend/app/api/v1/capture.py          — docstring only; route/contract unchanged
+  backend/app/models/__init__.py         — export PageChunk
+  backend/app/schemas/capture.py         — added optional `content` field + validator;
+                                            CaptureResponse gained content_processed/chunk_count
+  backend/app/services/ingestion.py      — clean/chunk/persist content, atomic with the
+                                            existing page-upsert + event-insert transaction
+  backend/tests/factories.py             — make_capture_request() gained an optional
+                                            `content` parameter (default None; existing
+                                            calls are unaffected)
+  backend/tests/test_capture_api.py      — RESPONSE_FIELDS extended; new content-related
+                                            API tests appended
+  backend/tests/test_capture_schemas.py  — new `content` field validation tests appended
+  backend/tests/test_ingestion.py        — chunks_of() helper + new content/chunk
+                                            persistence, replace-on-recapture, and
+                                            rollback tests appended
+
+4. DELETED files
+-----------------
+None.
+
+5. Nature of this archive
+--------------------------
+A DELTA against the Day 2 repository, containing only the 26 files listed above
+(14 created + 12 modified), plus this manifest (27 files total in the archive).
+Every other Day 1/Day 2 file — models, Day 1/2 migrations, config, docker-compose,
+requirements, the existing 0001 migration — is UNCHANGED and intentionally NOT
+included; overlay this delta rather than replacing the tree.
+
+6. Tests included in this delta, and their execution status
+---------------------------------------------------------------
+This sandbox has no Docker, no PostgreSQL, and none of fastapi / pydantic /
+sqlalchemy / alembic / pytest / httpx installed (same constraint as Day 1 and
+Day 2), and no network access to install them. It DOES have Node.js 22 with its
+built-in test runner. Test status by file:
+
+  ACTUALLY EXECUTED (real interpreter, real test runner):
+  - backend/tests/test_content_processing.py
+      Pure Python (no pydantic/sqlalchemy needed). Run via a throwaway,
+      hand-written stand-in test runner (NOT pytest — pytest is not installed
+      here) that supports only @pytest.mark.parametrize and pytest.raises().
+      Result: 42 passed, 0 failed.
+      This is NOT a substitute for real pytest execution; it only exercises the
+      module's logic, not pytest's own collection/fixture/marker machinery.
+  - extension/tests/privacy.test.mjs
+  - extension/tests/payload.test.mjs
+      Run for real with Node's built-in test runner: `node --test
+      tests/privacy.test.mjs tests/payload.test.mjs`. This is genuine execution,
+      not a stand-in — Node needs no extra packages for this.
+      Result: 23 passed, 0 failed (0 skipped, 0 cancelled).
+
+  NOT EXECUTED (written and statically checked only — py_compile / AST import
+  resolution for Python; `node --check` syntax check for browser-only JS; JSON
+  parse for manifest.json — none of these run the actual logic):
+  - backend/tests/test_capture_schemas.py  (needs pydantic)
+  - backend/tests/test_ingestion.py        (needs sqlalchemy + real PostgreSQL)
+  - backend/tests/test_capture_api.py      (needs fastapi + sqlalchemy + PostgreSQL)
+  - backend's own Day 1/2 test suite (test_config.py, test_health.py,
+    test_migrations.py, test_models.py, test_app.py, test_urls.py) was NOT
+    re-run this session either — same missing dependencies. test_urls.py's
+    118 cases WERE re-run once, alongside test_content_processing.py, through
+    the same stand-in runner, purely to confirm nothing in this session's edits
+    broke it; that is not a pytest run either.
+  - extension/src/content-script.js, popup.js, options.js — these use
+    chrome.* and DOM APIs that do not exist under Node, so they cannot execute
+    outside an actual Chrome browser. Only reviewed and `node --check`
+    syntax-validated.
+  - No Chrome browser was available to load the extension, click Capture, or
+    exercise the popup/options UI against a running backend.
+
+  Zero pytest execution occurred in this delta, exactly as in Day 1 and Day 2.
+  "254 passing tests" (or any updated count) has NOT been re-verified by
+  actually running pytest against this Day 3 code; only static consistency
+  checks were performed (see below).
+
+7. Static verification performed (not a substitute for the above)
+-----------------------------------------------------------------
+- `python3 -m compileall` over the full backend tree: all files compile.
+- AST-based check that every `from app.X import Y` / `from tests.X import Y`
+  resolves to something actually defined (125 names checked, 0 problems).
+- Manual cross-check of the PageChunk model against migration 0002: table name,
+  FK (page_id -> pages.id, ON DELETE CASCADE), unique constraint
+  (page_id, chunk_index), both CHECK constraints, the index, and the column set
+  all agree between the ORM model and the migration; revision chain 0001 -> 0002
+  confirmed; migration 0001 confirmed byte-unchanged.
+- manifest.json parses as valid JSON and declares the required MV3 keys
+  (manifest_version, name, version, content_scripts, action) plus
+  host_permissions for the local backend origins.
+
+8. Known limitations
+---------------------
+- No pytest/Docker/PostgreSQL execution of any backend test in this session
+  (see section 6) — this includes the new PageChunk persistence, chunk
+  replace-on-recapture, and rollback tests, which are written but unverified
+  against a real database.
+- No Chrome execution of the extension itself.
+- Manual capture only; no autonomous/always-on capture.
+- `manifest.json` host_permissions are static (127.0.0.1:8000, localhost:8000);
+  changing the configured API base URL to a different origin in Settings also
+  requires updating manifest.json.
+- No PII/secret redaction of captured text; cleaning is structural only
+  (whitespace, boilerplate lines, blank-line collapsing, a minimum-length
+  floor) — see docs/privacy.md.
+- `pages.extracted_text` remains an unused Day 1 placeholder column; real
+  extracted text lives in the new `page_chunks.text`.
+- Chunk size/overlap are process-wide constants in app/core/content.py, not
+  configurable per request.
