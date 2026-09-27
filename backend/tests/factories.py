@@ -8,7 +8,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.config import Settings
-from app.models import BrowsingEvent, Device, Page, PageChunk, User
+from app.models import BrowsingEvent, Device, Page, PageChunk, PageChunkEmbedding, User
 from app.schemas.capture import CaptureRequest
 
 T0 = datetime(2026, 1, 1, 12, 0, tzinfo=UTC)
@@ -82,6 +82,28 @@ def make_page_chunk(
     session.add(chunk)
     session.flush()
     return chunk
+
+
+def make_page_chunk_embedding(
+    session: Session,
+    user: User,
+    page: Page,
+    chunk: PageChunk,
+    embedding: list[float],
+    *,
+    model_id: str = "test/model-v1",
+) -> PageChunkEmbedding:
+    row = PageChunkEmbedding(
+        page_chunk_id=chunk.id,
+        page_id=page.id,
+        user_id=user.id,
+        embedding_model=model_id,
+        embedding_dimension=len(embedding),
+        embedding=embedding,
+    )
+    session.add(row)
+    session.flush()
+    return row
 
 
 def make_event(
