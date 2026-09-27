@@ -12,8 +12,19 @@ def test_application_starts_and_stops_without_a_database() -> None:
         schema = client.get("/openapi.json")
 
         assert schema.status_code == 200
-        assert {"/api/v1/health", "/api/v1/capture"} <= set(schema.json()["paths"])
+        assert {"/api/v1/health", "/api/v1/capture", "/api/v1/search"} <= set(schema.json()["paths"])
         assert client.get("/does-not-exist").status_code == 404
+
+
+def test_lifespan_attaches_one_lazy_encoder_on_app_state() -> None:
+    app = create_app(make_settings())
+
+    with TestClient(app) as client:
+        encoder = app.state.embedding_encoder
+        assert encoder is app.state.embedding_encoder
+        assert encoder.model_id == "BAAI/bge-small-en-v1.5"
+        assert encoder._model is None  # weights are not loaded at import or startup
+        assert "/api/v1/search" in client.get("/openapi.json").json()["paths"]
 
 
 def test_settings_are_carried_on_the_app_not_in_globals() -> None:

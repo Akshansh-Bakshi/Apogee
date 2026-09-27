@@ -14,6 +14,7 @@ from pydantic import BaseModel
 from sqlalchemy.exc import OperationalError
 
 from app.services.ingestion import DeviceNotFoundError, IngestionConflictError
+from app.services.search import EncoderUnavailableError
 
 logger = logging.getLogger(__name__)
 
@@ -56,6 +57,14 @@ async def _conflict(request: Request, exc: IngestionConflictError) -> JSONRespon
     return _error(status.HTTP_409_CONFLICT, "conflict", "The request conflicted with existing data. Retry it.")
 
 
+async def _encoder_unavailable(request: Request, exc: EncoderUnavailableError) -> JSONResponse:
+    return _error(
+        status.HTTP_503_SERVICE_UNAVAILABLE,
+        "encoder_unavailable",
+        "The embedding encoder is unavailable.",
+    )
+
+
 async def _database_unavailable(request: Request, exc: OperationalError) -> JSONResponse:
     logger.error("Database unavailable during %s %s", request.method, request.url.path)
     return _error(status.HTTP_503_SERVICE_UNAVAILABLE, "database_unavailable", "The service is temporarily unavailable.")
@@ -72,5 +81,6 @@ def register_exception_handlers(app: FastAPI) -> None:
     app.add_exception_handler(RequestValidationError, _validation_error)
     app.add_exception_handler(DeviceNotFoundError, _device_not_found)
     app.add_exception_handler(IngestionConflictError, _conflict)
+    app.add_exception_handler(EncoderUnavailableError, _encoder_unavailable)
     app.add_exception_handler(OperationalError, _database_unavailable)
     app.add_exception_handler(Exception, _unexpected_error)
