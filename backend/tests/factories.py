@@ -8,7 +8,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.config import Settings
-from app.models import BrowsingEvent, Device, Page, User
+from app.models import BrowsingEvent, Device, Page, PageChunk, User
 from app.schemas.capture import CaptureRequest
 
 T0 = datetime(2026, 1, 1, 12, 0, tzinfo=UTC)
@@ -63,6 +63,25 @@ def make_page(
     session.add(page)
     session.flush()
     return page
+
+
+def make_page_chunk(
+    session: Session,
+    page: Page,
+    text: str = "A useful page passage.",
+    *,
+    chunk_index: int = 0,
+) -> PageChunk:
+    chunk = PageChunk(
+        page_id=page.id,
+        chunk_index=chunk_index,
+        text=text,
+        char_start=0,
+        char_end=len(text),
+    )
+    session.add(chunk)
+    session.flush()
+    return chunk
 
 
 def make_event(
