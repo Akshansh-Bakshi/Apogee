@@ -36,6 +36,13 @@ class Settings(BaseSettings):
 
     db_connect_timeout_seconds: int = Field(default=5, ge=1)
 
+    # Embeddings run locally through Sentence Transformers. Once model weights are cached,
+    # EMBEDDING_LOCAL_FILES_ONLY can be enabled to guarantee offline initialization.
+    embedding_model_id: str = "BAAI/bge-small-en-v1.5"
+    embedding_device: str = "cpu"
+    embedding_local_files_only: bool = False
+    embedding_query_instruction: str = "Represent this sentence for searching relevant passages:"
+
     @field_validator("postgres_password")
     @classmethod
     def _password_must_not_be_empty(cls, value: SecretStr) -> SecretStr:

@@ -15,7 +15,14 @@ from tests.db_utils import ALEMBIC_INI, downgrade, temporary_database, upgrade
 
 pytestmark = pytest.mark.db
 
-APP_TABLES = {"users", "devices", "pages", "browsing_events"}
+APP_TABLES = {
+    "users",
+    "devices",
+    "pages",
+    "browsing_events",
+    "page_chunks",
+    "page_chunk_embeddings",
+}
 
 EXPECTED_INDEXES = {
     "devices": {"ix_devices_user_id", "uq_devices_id_user_id"},
@@ -31,6 +38,10 @@ EXPECTED_INDEXES = {
         "ix_browsing_events_user_id_domain_occurred_at",
         "ix_browsing_events_page_id",
         "ix_browsing_events_user_id_session_id",
+    },
+    "page_chunk_embeddings": {
+        "ix_page_chunk_embeddings_user_id",
+        "ix_page_chunk_embeddings_embedding_hnsw",
     },
 }
 
@@ -79,6 +90,20 @@ def test_models_and_migrations_have_not_drifted(engine: Engine) -> None:
         differences = compare_metadata(context, Base.metadata)
 
     assert differences == [], f"models differ from the migrated schema: {differences}"
+
+
+def test_embedding_hnsw_index_uses_cosine_distance(engine: Engine) -> None:
+    with engine.connect() as connection:
+        indexdef = connection.scalar(
+            text(
+                "SELECT indexdef FROM pg_indexes "
+                "WHERE schemaname = 'public' "
+                "AND indexname = 'ix_page_chunk_embeddings_embedding_hnsw'"
+            )
+        )
+
+    assert indexdef is not None
+    assert "USING hnsw (embedding vector_cosine_ops)" in indexdef
 
 
 def test_migration_can_be_downgraded_and_reapplied(base_settings: Settings) -> None:

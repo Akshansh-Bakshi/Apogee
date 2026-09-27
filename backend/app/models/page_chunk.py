@@ -21,6 +21,7 @@ class PageChunk(Base):
     __tablename__ = "page_chunks"
     __table_args__ = (
         UniqueConstraint("page_id", "chunk_index", name="uq_page_chunks_page_id_chunk_index"),
+        UniqueConstraint("id", "page_id", name="uq_page_chunks_id_page_id"),
         CheckConstraint("char_end > char_start", name="ck_page_chunks_char_end_after_char_start"),
         CheckConstraint("chunk_index >= 0", name="ck_page_chunks_chunk_index_non_negative"),
         Index("ix_page_chunks_page_id", "page_id"),
