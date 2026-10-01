@@ -43,6 +43,7 @@ EXPECTED_INDEXES = {
         "ix_page_chunk_embeddings_user_id",
         "ix_page_chunk_embeddings_embedding_hnsw",
     },
+    "page_chunks": {"ix_page_chunks_text_fts"},
 }
 
 
@@ -104,6 +105,19 @@ def test_embedding_hnsw_index_uses_cosine_distance(engine: Engine) -> None:
 
     assert indexdef is not None
     assert "USING hnsw (embedding vector_cosine_ops)" in indexdef
+
+
+def test_page_chunk_fts_index_uses_english_tsvector(engine: Engine) -> None:
+    with engine.connect() as connection:
+        indexdef = connection.scalar(
+            text(
+                "SELECT indexdef FROM pg_indexes "
+                "WHERE schemaname = 'public' AND indexname = 'ix_page_chunks_text_fts'"
+            )
+        )
+
+    assert indexdef is not None
+    assert "USING gin (to_tsvector('english'::regconfig, text))" in indexdef
 
 
 def test_migration_can_be_downgraded_and_reapplied(base_settings: Settings) -> None:

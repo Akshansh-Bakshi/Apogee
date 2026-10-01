@@ -3,7 +3,17 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import CheckConstraint, ForeignKey, Index, Integer, Text, UniqueConstraint, func, text
+from sqlalchemy import (
+    CheckConstraint,
+    ForeignKey,
+    Index,
+    Integer,
+    Text,
+    UniqueConstraint,
+    func,
+    literal_column,
+    text,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
@@ -43,3 +53,12 @@ class PageChunk(Base):
     char_end: Mapped[int] = mapped_column(Integer)
 
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+
+
+PageChunk.__table__.append_constraint(
+    Index(
+        "ix_page_chunks_text_fts",
+        func.to_tsvector(literal_column("'english'::regconfig"), PageChunk.text),
+        postgresql_using="gin",
+    )
+)
