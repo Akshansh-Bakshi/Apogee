@@ -8,7 +8,7 @@ using semantic embeddings, temporal/session context, and a learned ranking model
 in a backend and database that *you* run. Multiple devices will feed one user account. Privacy
 controls are a first-class requirement, not an afterthought (see [docs/privacy.md](docs/privacy.md)).
 
-## Current scope: Days 1-3 (backend foundation + ingestion + first vertical slice)
+## Current scope: backend, ingestion, and semantic retrieval
 
 This repository contains the infrastructure the later ML and retrieval work sits on, a reliable
 path for data to get into it, and now a minimal end-to-end path from a real browser tab to stored,
@@ -21,6 +21,7 @@ chunked text:
 - Page upsert + event insert (+ chunk persistence, when content is sent) in one transaction, using
   PostgreSQL's `ON CONFLICT`
 - Text cleaning and deterministic chunking (`app/core/content.py`), stored in a `page_chunks` table
+- Automatic post-capture BGE embeddings and user-scoped cosine search (`POST /api/v1/search`)
 - A minimal Chrome (Manifest V3) extension: a manual "Capture this page" button, a client-side
   privacy filter (excluded domains + http/https-only), and settings for the API URL and IDs (see
   [extension/README.md](extension/README.md))
@@ -37,9 +38,9 @@ chunked text:
 
 Always-on/autonomous capture (only a manual click today), authentication and device
 registration/sync (the capture endpoint is still an unauthenticated development-stage boundary and
-the extension stores its configured IDs unencrypted), embeddings, semantic search / vector
-retrieval, temporal or session scoring, learned ranking, clustering / drift analysis, and the
-dashboard. `dashboard/` and `ml/` still contain only a README marking the project boundary. See
+the extension stores its configured IDs unencrypted), temporal or session scoring, learned
+ranking, clustering / drift analysis, and the dashboard. `dashboard/` and `ml/` still contain only
+a README marking the project boundary. See
 [docs/architecture.md](docs/architecture.md).
 
 ## Architecture at this stage
@@ -242,6 +243,12 @@ persisted. `content_processed`/`chunk_count` are `true`/`>0` only when the reque
 which **replace** any chunks stored from an earlier capture of the same page — a page's chunks
 always reflect its most recently captured content, not an accumulating history. A capture with no
 `content` (a plain revisit) leaves previously stored chunks untouched.
+
+After a successful capture with content, the API schedules embedding of that page's current chunks
+as a FastAPI background task. The capture transaction commits first, and embedding uses a separate
+database session with the lifespan-owned BGE encoder. This is eventually consistent: semantic
+search can temporarily omit a newly captured page until its embedding task finishes. A failed
+embedding does not undo the capture; the task logs a safe server-side error.
 
 ### Errors
 

@@ -4,15 +4,17 @@ import uuid
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from typing import Sequence
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import Engine, delete
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy import Engine, delete, select
+from sqlalchemy.orm import Session, sessionmaker
 
 from app.core.config import Settings
 from app.main import create_app
-from app.models import BrowsingEvent, Page, PageChunk, User
+from app.models import BrowsingEvent, Page, PageChunk, PageChunkEmbedding, User
+from app.services.embeddings import EmbeddingRole
 from app.services.ingestion import IngestionConflictError
 from tests.factories import count, make_device, make_settings, make_user
 
@@ -51,6 +53,26 @@ def body(owner: Owner, url: str = FIRST_VISIT, **overrides: object) -> dict[str,
     }
 
 
+class FakeEncoder:
+    dimension = 384
+
+    def __init__(self, model_id: str) -> None:
+        self.model_id = model_id
+        self.calls: list[list[str]] = []
+        self.fail = False
+
+    def encode_text(self, text: str, *, role: EmbeddingRole = "passage") -> list[float]:
+        return self.encode_batch([text], role=role)[0]
+
+    def encode_batch(
+        self, texts: Sequence[str], *, role: EmbeddingRole = "passage"
+    ) -> list[list[float]]:
+        self.calls.append(list(texts))
+        if self.fail:
+            raise RuntimeError("sensitive page text from test")
+        return [[1.0] + [0.0] * 383 for _ in texts]
+
+
 # --- fixtures ---------------------------------------------------------------------------------
 
 
@@ -69,6 +91,7 @@ def stranger() -> Owner:
 @pytest.fixture
 def client(migrated_settings: Settings) -> Iterator[TestClient]:
     with TestClient(create_app(migrated_settings), raise_server_exceptions=False) as test_client:
+        test_client.app.state.embedding_encoder = FakeEncoder(migrated_settings.embedding_model_id)
         yield test_client
 
 
@@ -324,6 +347,108 @@ def test_a_capture_with_content_is_cleaned_and_chunked(
     assert result["content_processed"] is True
     assert result["chunk_count"] >= 1
     assert rows(engine, PageChunk, page_id=uuid.UUID(result["page_id"])) == result["chunk_count"]
+
+
+@pytest.mark.db
+def test_a_capture_schedules_embedding_after_chunks_are_committed(
+    client: TestClient, engine: Engine, make_owner: Callable[[], Owner], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    owner = make_owner()
+    observed: list[tuple[uuid.UUID, int, object]] = []
+
+    def observe(factory: sessionmaker[Session], page_id: uuid.UUID, encoder: object) -> None:
+        with factory() as session:
+            observed.append((page_id, count(session, PageChunk, page_id=page_id), encoder))
+
+    monkeypatch.setattr("app.api.v1.capture.embed_page_after_capture", observe)
+    response = client.post(ENDPOINT, json=body(owner, content="A useful article paragraph. " * 8))
+
+    assert response.status_code == 201
+    assert len(observed) == 1
+    page_id, committed_chunks, encoder = observed[0]
+    assert page_id == uuid.UUID(response.json()["page_id"])
+    assert committed_chunks == response.json()["chunk_count"]
+    assert encoder is client.app.state.embedding_encoder
+
+
+@pytest.mark.db
+def test_capture_background_embedding_persists_configured_384_dimensional_vectors(
+    client: TestClient, engine: Engine, make_owner: Callable[[], Owner]
+) -> None:
+    owner = make_owner()
+    response = client.post(ENDPOINT, json=body(owner, content="A useful article paragraph. " * 8))
+    page_id = uuid.UUID(response.json()["page_id"])
+
+    with sessionmaker(bind=engine)() as session:
+        chunks = session.scalars(select(PageChunk).where(PageChunk.page_id == page_id)).all()
+        embeddings = session.scalars(
+            select(PageChunkEmbedding).where(PageChunkEmbedding.page_id == page_id)
+        ).all()
+
+    assert response.status_code == 201
+    assert len(embeddings) == len(chunks) == response.json()["chunk_count"]
+    assert {row.page_chunk_id for row in embeddings} == {chunk.id for chunk in chunks}
+    assert {row.embedding_model for row in embeddings} == {
+        client.app.state.settings.embedding_model_id
+    }
+    assert {row.embedding_dimension for row in embeddings} == {384}
+
+
+@pytest.mark.db
+def test_embedding_failure_does_not_undo_committed_capture_or_log_page_contents(
+    client: TestClient,
+    engine: Engine,
+    make_owner: Callable[[], Owner],
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    owner = make_owner()
+    text = "PRIVATE CONTENT SHOULD NOT APPEAR IN LOGS " * 4
+    encoder = client.app.state.embedding_encoder
+    encoder.fail = True
+
+    response = client.post(ENDPOINT, json=body(owner, content=text))
+
+    assert response.status_code == 201
+    page_id = uuid.UUID(response.json()["page_id"])
+    assert rows(engine, Page, user_id=owner.user_id) == 1
+    assert rows(engine, BrowsingEvent, user_id=owner.user_id) == 1
+    assert rows(engine, PageChunk, page_id=page_id) == response.json()["chunk_count"]
+    assert rows(engine, PageChunkEmbedding, page_id=page_id) == 0
+    assert "PRIVATE CONTENT SHOULD NOT APPEAR" not in caplog.text
+
+
+@pytest.mark.db
+def test_recapture_replaces_chunks_and_cascades_old_embeddings(
+    client: TestClient, engine: Engine, make_owner: Callable[[], Owner]
+) -> None:
+    owner = make_owner()
+    first = client.post(ENDPOINT, json=body(owner, content="First captured paragraph. " * 8)).json()
+    page_id = uuid.UUID(first["page_id"])
+    with sessionmaker(bind=engine)() as session:
+        old_chunk_ids = set(
+            session.scalars(select(PageChunk.id).where(PageChunk.page_id == page_id)).all()
+        )
+
+    second_response = client.post(
+        ENDPOINT,
+        json=body(owner, occurred_at="2026-01-02T12:00:00Z", content="Replacement page content only. " * 8),
+    )
+    second = second_response.json()
+    with sessionmaker(bind=engine)() as session:
+        current_chunk_ids = set(
+            session.scalars(select(PageChunk.id).where(PageChunk.page_id == page_id)).all()
+        )
+        embedded_chunk_ids = set(
+            session.scalars(
+                select(PageChunkEmbedding.page_chunk_id).where(PageChunkEmbedding.page_id == page_id)
+            ).all()
+        )
+
+    assert second_response.status_code == 201
+    assert second["page_id"] == first["page_id"]
+    assert current_chunk_ids.isdisjoint(old_chunk_ids)
+    assert embedded_chunk_ids == current_chunk_ids
+    assert embedded_chunk_ids.isdisjoint(old_chunk_ids)
 
 
 @pytest.mark.db

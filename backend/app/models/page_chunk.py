@@ -14,8 +14,8 @@ class PageChunk(Base):
 
     Produced by ``app.core.content.chunk_text`` at capture time and written by
     ``app.services.ingestion``. A page's chunks are replaced as a whole on every capture that
-    includes content (see ``ingestion._replace_chunks``); nothing here is embedded yet (see
-    docs/architecture.md, "Vector storage").
+    includes content (see ``ingestion._replace_chunks``); the current chunks are embedded
+    asynchronously after the capture transaction commits.
     """
 
     __tablename__ = "page_chunks"

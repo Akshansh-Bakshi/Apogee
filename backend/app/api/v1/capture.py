@@ -1,11 +1,12 @@
 """POST /api/v1/capture: record one browsing event."""
 
-from fastapi import APIRouter, status
+from fastapi import APIRouter, BackgroundTasks, Request, status
 
 from app.api.deps import DbSession
 from app.api.errors import ErrorResponse
 from app.schemas.capture import CaptureRequest, CaptureResponse
 from app.services.ingestion import ingest_browsing_event
+from app.services.post_capture import embed_page_after_capture
 
 router = APIRouter(tags=["capture"])
 
@@ -22,7 +23,12 @@ router = APIRouter(tags=["capture"])
         503: {"model": ErrorResponse, "description": "Database temporarily unavailable"},
     },
 )
-def capture(payload: CaptureRequest, session: DbSession) -> CaptureResponse:
+def capture(
+    payload: CaptureRequest,
+    background_tasks: BackgroundTasks,
+    request: Request,
+    session: DbSession,
+) -> CaptureResponse:
     """Normalise the URL, find or create the user's page for it, and store one event.
 
     Every accepted request creates a new event (hence 201); ``page_created`` says whether the page
@@ -40,4 +46,12 @@ def capture(payload: CaptureRequest, session: DbSession) -> CaptureResponse:
     can write events for any user. Authentication is deliberately deferred; do not expose this
     service beyond a trusted machine or network.
     """
-    return ingest_browsing_event(session, payload)
+    result = ingest_browsing_event(session, payload)
+    if result.content_processed and result.chunk_count:
+        background_tasks.add_task(
+            embed_page_after_capture,
+            request.app.state.session_factory,
+            result.page_id,
+            request.app.state.embedding_encoder,
+        )
+    return result
