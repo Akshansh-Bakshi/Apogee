@@ -55,8 +55,9 @@ BOILERPLATE_LINES = frozenset(
 )
 
 _CONTROL_CHARACTERS = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")  # keep \t \n
-_HORIZONTAL_WHITESPACE = re.compile(r"[ \t\u00a0\u200b]+")  # plain space/tab, NBSP, zero-width space
+_HORIZONTAL_WHITESPACE = re.compile(r"[ \t]+")
 _MULTIPLE_BLANK_LINES = re.compile(r"\n{3,}")
+_CODE_FENCE = re.compile(r"^\s*(`{3,}|~{3,})([^`]*)$")
 
 
 class ContentRejectedError(ValueError):
@@ -67,15 +68,30 @@ def clean_text(raw: str) -> str:
     """Return a normalised version of ``raw``, or raise ``ContentRejectedError``."""
     text = raw.replace("\r\n", "\n").replace("\r", "\n")
     text = _CONTROL_CHARACTERS.sub("", text)
-    text = _HORIZONTAL_WHITESPACE.sub(" ", text)
+    text = text.replace("\u00a0", " ").replace("\u200b", "")
 
     lines: list[str] = []
     previous: str | None = None
+    code_fence: tuple[str, int] | None = None
     for line in text.split("\n"):
-        stripped = line.strip()
+        if code_fence is not None:
+            lines.append(line.rstrip())
+            closing = _CODE_FENCE.match(line)
+            if closing and closing.group(1)[0] == code_fence[0] and len(closing.group(1)) >= code_fence[1]:
+                code_fence = None
+            previous = None
+            continue
+
+        stripped = _HORIZONTAL_WHITESPACE.sub(" ", line).strip()
         if not stripped:
             lines.append("")  # preserve the paragraph break; collapsed below
             previous = None  # a blank line always resets duplicate-detection
+            continue
+        opening = _CODE_FENCE.match(stripped)
+        if opening:
+            lines.append(stripped)
+            code_fence = (opening.group(1)[0], len(opening.group(1)))
+            previous = None
             continue
         if stripped.lower() in BOILERPLATE_LINES:
             continue

@@ -85,6 +85,20 @@ def test_non_adjacent_repeated_lines_are_both_kept() -> None:
     assert cleaned.count(PARAGRAPH) == 2
 
 
+def test_fenced_code_preserves_indentation_spacing_and_repeated_lines() -> None:
+    source = (
+        "A graph queue stores vertices in breadth-first order.\n\n"
+        "```python\n"
+        "    queue  = deque([start])\n"
+        "    queue  = deque([start])\n"
+        "```"
+    )
+
+    cleaned = clean_text(source)
+
+    assert "```python\n    queue  = deque([start])\n    queue  = deque([start])\n```" in cleaned
+
+
 # --- clean_text: rejection ------------------------------------------------------------------------
 
 

@@ -70,17 +70,20 @@ popup.js  ──(chrome.tabs.sendMessage)──►  src/content-script.js   (ext
   └─ fetch(...)  ──►  POST /api/v1/capture   (existing Day 2 endpoint, unmodified contract)
 ```
 
-`src/privacy.mjs` and `src/payload.mjs` have no dependency on `chrome.*` or the DOM, so they are
-imported directly by the Node tests in `tests/`. `src/content-script.js` and `popup.js`/`options.js`
-use browser-only APIs (`document`, `chrome.tabs`, `chrome.storage`) and cannot run under Node; they
-have been reviewed and syntax-checked (`node --check`) but not executed. There is no background
-service worker: a static content script plus a popup is sufficient for manual, click-triggered
-capture, and MV3 does not require one for this.
+`src/privacy.mjs` and `src/payload.mjs` are tested directly with Node. Extraction tests execute
+`src/content-script.js` in a small DOM fixture and exercise its real message handler and extraction
+path. The extension itself remains plain JavaScript with no build step or background service worker;
+a static content script plus a popup is sufficient for manual, click-triggered capture.
+
+Extraction prefers visible `<article>`, `<main>`, and `role="main"` content. It filters hidden
+elements, semantic site chrome and common UI containers, and wraps `<pre>` blocks in code fences so
+the backend cleaner preserves code indentation and repeated lines. Without a content landmark it
+falls back to visible body text with the same boilerplate and link-heavy filtering.
 
 ## Tests
 
 ```
-node --test tests/privacy.test.mjs tests/payload.test.mjs
+node --test tests/privacy.test.mjs tests/payload.test.mjs tests/extraction.test.mjs
 ```
 
 These genuinely execute (Node's built-in test runner, no dependencies to install) and cover the
