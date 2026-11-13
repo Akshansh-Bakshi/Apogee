@@ -1,4 +1,5 @@
 APOGEE — Day 2 DELTA delivery manifest
+HISTORICAL SNAPSHOT: This manifest records the Day 2 state and is not the current implementation status.
 =======================================
 
 1. Baseline

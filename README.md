@@ -4,11 +4,12 @@
 
 Apogee is a self-hosted personal web-memory system. The goal: you describe a page you half-remember
 ("that article about consensus algorithms I read on my phone last month") and Apogee finds it,
-using semantic embeddings, temporal/session context, and a learned ranking model. Your data lives
+using semantic embeddings and recorded browsing events. No supervised ranking model is trained
+or deployed. Your data lives
 in a backend and database that *you* run. Multiple devices will feed one user account. Privacy
 controls are a first-class requirement, not an afterthought (see [docs/privacy.md](docs/privacy.md)).
 
-## Current scope: backend, ingestion, and semantic retrieval
+## Current implementation
 
 This repository contains the infrastructure the later ML and retrieval work sits on, a reliable
 path for data to get into it, and now a minimal end-to-end path from a real browser tab to stored,
@@ -22,12 +23,19 @@ chunked text:
   PostgreSQL's `ON CONFLICT`
 - Text cleaning and deterministic chunking (`app/core/content.py`), stored in a `page_chunks` table
 - Automatic post-capture BGE embeddings and user-scoped cosine search (`POST /api/v1/search`)
+- BAAI/bge-small-en-v1.5 passage embeddings stored as 384-dimensional pgvector vectors;
+  independent PostgreSQL full-text retrieval (`POST /api/v1/search/lexical`)
+- Provisional zero-shot topic suggestions (`GET /api/v1/topics/assignments`), observed
+  browsing activity and graph-based prerequisite suggestions (`GET /api/v1/topics/coverage`),
+  and bounded event history (`GET /api/v1/history`)
+- Local dashboard at `http://127.0.0.1:8000/app` (search, Exploration and Timeline; see
+  [dashboard/README.md](dashboard/README.md))
 - A minimal Chrome (Manifest V3) extension: a manual "Capture this page" button, a client-side
   privacy filter (excluded domains + http/https-only), and settings for the API URL and IDs (see
   [extension/README.md](extension/README.md))
 - PostgreSQL + [pgvector](https://github.com/pgvector/pgvector), via Docker Compose
-- SQLAlchemy 2.x models and two Alembic migrations: `users`/`devices`/`pages`/`browsing_events`,
-  then `page_chunks`
+- SQLAlchemy 2.x models and four Alembic migrations: `0001` core tables and pgvector,
+  `0002` page chunks, `0003` chunk embeddings, and `0004` full-text search
 - Environment-based configuration (no credentials in code)
 - pytest suite (pure unit tests + tests against a real PostgreSQL) and a Node test suite for the
   extension's pure logic
@@ -36,11 +44,11 @@ chunked text:
 
 ### Not implemented yet
 
-Always-on/autonomous capture (only a manual click today), authentication and device
-registration/sync (the capture endpoint is still an unauthenticated development-stage boundary and
-the extension stores its configured IDs unencrypted), temporal or session scoring, learned
-ranking, clustering / drift analysis, and the dashboard. `dashboard/` and `ml/` still contain only
-a README marking the project boundary. See
+Always-on capture, authentication and device registration/sync, session inference,
+supervised ranking or topic classification, and clustering/drift analysis. The extension
+stores configured IDs unencrypted. Topic cosine similarities are not probabilities; the
+exploration activity index measures observed browsing, not learning mastery. Caller-supplied
+`user_id` scopes queries but is not authentication. Keep the Compose ports loopback-bound; see
 [docs/architecture.md](docs/architecture.md).
 
 ## Architecture at this stage
@@ -80,7 +88,7 @@ The pgvector extension is enabled by the first migration (`CREATE EXTENSION IF N
 Never change the schema by hand; write a migration.
 
 ```bash
-# Apply all migrations to the (fresh) database
+# Apply migrations to a fresh database only; inspect `alembic current` and `heads` first on existing data
 docker compose --env-file .env -f infrastructure/docker-compose.yml run --rm backend alembic upgrade head
 
 # Inspect state / history
@@ -181,7 +189,7 @@ https://example.com/tutorial?id=42&utm_source=twitter#section2
 > and `device_id` and nothing verifies who they are, so anyone who can reach the port can write
 > events for any user. Run it only on a trusted machine/network (the compose file binds to
 > `127.0.0.1`). Authentication is deliberately deferred; see [docs/architecture.md](docs/architecture.md).
-> Client-side privacy filtering (the future extension) must happen *before* upload; the server-side
+> Client-side privacy filtering in the extension happens *before* upload; the server-side
 > checks here are defence in depth. See [docs/privacy.md](docs/privacy.md).
 
 ### Try it
@@ -284,5 +292,7 @@ backend/        FastAPI app, Alembic migrations, tests
 extension/      Chrome MV3 extension: manual capture, privacy filter, settings (see its own README)
 infrastructure/ docker-compose.yml
 docs/           architecture.md, privacy.md
-extension/ dashboard/ ml/   future components (README only)
+extension/                 manual Chrome capture
+dashboard/                 local dashboard usage notes
+ml/                        benchmark and evaluation tools
 ```

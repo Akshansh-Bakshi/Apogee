@@ -21,10 +21,14 @@ Captured (only on a manual click): URL, page title, timestamp, and visible text 
 `aria-hidden` elements, and `<script>`/`<style>`/`<noscript>`/`<template>`/`<iframe>` content, are
 excluded from "visible text").
 
-Never captured: cookies, passwords, authentication tokens, form values, typed input, or any
-browsing history beyond the one page you chose to capture.
+The extension does not intentionally read cookies, passwords, tokens, form values, typed input,
+or other browsing history. Visible page text and URLs can still contain sensitive data; there is
+no PII or secret redaction.
 
 ## Privacy filter
+
+If no exclusion list has been saved, the popup uses the default list below. A deliberately
+saved empty list overrides those defaults. Review the list before capturing private pages.
 
 - **Excluded domains** are configured on the options page (Settings), one per line. A page is
   excluded if its hostname exactly matches an entry, or is a subdomain of one (a leading `.` or
@@ -91,9 +95,8 @@ privacy filter and payload construction in isolation — including that sensitiv
 passwords, form values, ...) passed into `buildCapturePayload` never appear in its output, since it
 always builds a fresh object from a fixed, named set of fields.
 
-Manual, browser-only checks (loading the extension, clicking Capture against a real backend,
-confirming the popup's excluded/success/error states) have not been performed in this environment,
-which has no Chrome to run.
+Manual capture against the running backend has been verified in Chrome. Automated Node tests
+exercise the popup privacy gate, payload, and extraction logic; they do not replace browser tests.
 
 ## Known limitations
 

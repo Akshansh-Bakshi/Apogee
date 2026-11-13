@@ -1,5 +1,5 @@
 import { buildCapturePayload } from "./src/payload.mjs";
-import { canCapture } from "./src/privacy.mjs";
+import { canCapture, DEFAULT_EXCLUDED_DOMAINS } from "./src/privacy.mjs";
 
 const statusEl = document.getElementById("status");
 const buttonEl = document.getElementById("capture");
@@ -15,7 +15,7 @@ async function getConfig() {
     apiBaseUrl: stored.apiBaseUrl || "http://127.0.0.1:8000",
     userId: stored.userId || "",
     deviceId: stored.deviceId || "",
-    excludedDomains: stored.excludedDomains || [],
+    excludedDomains: stored.excludedDomains ?? DEFAULT_EXCLUDED_DOMAINS,
   };
 }
 

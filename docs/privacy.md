@@ -3,9 +3,9 @@
 Apogee stores a record of what someone reads on the web. That is sensitive by nature, so privacy is
 a design constraint from the first table.
 
-> **Status.** The browser extension and its local privacy filtering are **future work** and are not
-> implemented. This document states the principles the project commits to and how the Day 1 database
-> and API were shaped so those controls are easy to add. It does not describe features that exist.
+> **Status.** Manual browser capture and a configurable excluded-domain filter are implemented.
+> They do not detect or redact sensitive data within permitted pages. Keep the API loopback-bound;
+> caller-supplied `user_id` is a scope filter, not authentication.
 
 ## Principles
 
@@ -32,7 +32,7 @@ Apogee should:
   - deleting a user removes all their devices, pages and events;
   - deleting a device removes the events it captured;
   - deleting a page removes the events that reference it.
-  Any future table (embeddings, sessions, …) must follow the same rule, so data derived from a page
+  The current embedding table follows this rule; any future session table must too, so derived data
   cannot outlive it. The database enforces this, so it does not depend on application code.
 - **Ownership is enforced, not assumed.** Composite foreign keys stop an event from referencing
   another user's device or page.
@@ -45,11 +45,11 @@ Apogee should:
 ## Server-side validation (Day 2)
 
 `POST /api/v1/capture` adds a first server-side layer. It is **defence in depth only**: the browser
-extension (future) must filter *before upload*, so the server never receives what it must not keep.
+extension filters before upload, so excluded pages do not reach the server.
 
-- **Only known fields are accepted.** Any other key (cookies, passwords, tokens, form values, browser
-  storage, page text, ...) is rejected with `422`, not ignored. The request has no field in which
-  such data could be stored.
+- **Only known fields are accepted.** Unknown keys (cookies, passwords, tokens, form values,
+  browser storage) are rejected with `422`. The documented `content` field accepts visible page
+  text and can contain sensitive material; it is not automatically redacted.
 - **Only `http`/`https` URLs** are accepted; `javascript:`, `data:`, `file:`, `chrome:` and the rest
   are rejected.
 - **URLs with embedded credentials** (`https://user:pass@host/`) are rejected.
@@ -74,8 +74,9 @@ backend today.
 - **What it captures**, and only on request from the popup: the current tab's URL, title,
   timestamp, and visible text (extracted from the DOM; hidden and `aria-hidden` elements, and
   `<script>`/`<style>`/`<noscript>`/`<template>`/`<iframe>` content, are excluded).
-- **What it never captures**: cookies, passwords, authentication tokens, form values, typed input,
-  or any browsing history beyond the single page the user chose to capture. The content script is
+- **What it does not intentionally read**: cookies, passwords, authentication tokens, form values, typed input,
+  or any browsing history beyond the single page the user chose to capture. Visible page text or
+  URLs may nevertheless contain secrets; no content redaction is implemented. The content script is
   passive — it only reads the page when the popup explicitly asks it to.
 - **The privacy filter runs before anything is extracted**, in the popup, not the backend: a page
   is checked against a configurable excluded-domain list (`extension/src/privacy.mjs`) and must be

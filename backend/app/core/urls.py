@@ -102,6 +102,8 @@ def normalize_url(raw_url: str) -> str:
         raise InvalidUrlError("URLs containing credentials are not accepted")
     if not hostname:
         raise InvalidUrlError("URL must include a host")
+    if "[" in parts.netloc or "]" in parts.netloc:
+        _validate_bracketed_host(parts.netloc, hostname)
 
     host = _normalize_hostname(hostname)
     netloc = f"[{host}]" if ":" in host else host
@@ -119,6 +121,21 @@ def normalize_url(raw_url: str) -> str:
     if len(canonical) > MAX_CANONICAL_URL_LENGTH:
         raise InvalidUrlError(f"URL is longer than {MAX_CANONICAL_URL_LENGTH} characters")
     return canonical
+
+
+def _validate_bracketed_host(netloc: str, hostname: str) -> None:
+    """Require bracket syntax to be a complete IPv6 authority, optionally followed by a port."""
+    if (
+        not netloc.startswith("[")
+        or netloc.count("[") != 1
+        or netloc.count("]") != 1
+        or ":" not in hostname
+    ):
+        raise InvalidUrlError("Bracketed URL hosts must be valid IPv6 literals")
+
+    suffix = netloc[netloc.index("]") + 1 :]
+    if suffix and not re.fullmatch(r":\d*", suffix):
+        raise InvalidUrlError("URL port is invalid")
 
 
 def extract_domain(url: str) -> str:

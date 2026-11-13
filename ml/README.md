@@ -78,3 +78,9 @@ python -m pytest ml/tests
 
 The tests use mocked endpoint payloads and in-memory history fixtures; they do not depend on the
 current local database or make API calls.
+
+## Topic annotation
+
+The local, blinded human topic review and offline evaluation workflow is documented in
+[`topic-annotation.md`](topic-annotation.md). It evaluates the provisional
+`apogee-technical-v1` assignments and does not train a model.

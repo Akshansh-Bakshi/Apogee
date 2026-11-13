@@ -151,6 +151,33 @@ def test_ports_are_handled_correctly(raw: str, expected: str) -> None:
     assert normalize_url(raw) == expected
 
 
+@pytest.mark.parametrize(
+    "raw",
+    [
+        "http://[not-an-ip]/",
+        "http://[127.0.0.1]/",
+        "http://[::1]junk/",
+        "http://example[.com]/",
+        "http://[::1]]/",
+    ],
+)
+def test_malformed_bracketed_hosts_are_rejected(raw: str) -> None:
+    with pytest.raises(InvalidUrlError):
+        normalize_url(raw)
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        ("http://[::1]/", "http://[::1]/"),
+        ("http://[0:0:0:0:0:0:0:1]:80/path", "http://[::1]/path"),
+        ("https://[2001:0DB8:0:0::1]:8443/path", "https://[2001:db8::1]:8443/path"),
+    ],
+)
+def test_valid_bracketed_ipv6_hosts_are_canonicalised(raw: str, expected: str) -> None:
+    assert normalize_url(raw) == expected
+
+
 # --- trailing slashes -------------------------------------------------------------------------
 
 

@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>Search · Apogee</title>
+  <link rel="stylesheet" href="/app/assets/style.css">
+  <script type="module" src="/app/assets/app.js"></script>
+  <script type="module" src="/app/assets/exploration.js"></script>
+  <script type="module" src="/app/assets/history.js"></script>
+</head>
+<body>
+  <main class="shell">
+    <header class="masthead">
+      <div class="brand"><span class="brand-mark" aria-hidden="true">✳</span> APOGEE <span class="brand-detail">/ personal web memory</span></div>
+      <span class="local-badge">LOCAL DEMO</span>
+    </header>
+
+    <section class="hero" aria-labelledby="page-title">
+      <p class="eyebrow">YOUR CAPTURED WEB</p>
+      <h1 id="page-title">Find the page you remember.</h1>
+      <p class="intro">Describe an idea, a phrase, or something you read. Search your saved pages by meaning or matching words.</p>
+    </section>
+
+    <form id="search-form" class="search-panel">
+      <label for="query" class="field-label">What are you looking for?</label>
+      <div class="search-row">
+        <input id="query" name="query" type="search" maxlength="1000" required autocomplete="off" placeholder="e.g. an article about vector similarity in PostgreSQL">
+        <button id="search-button" type="submit">Search <span aria-hidden="true">↗</span></button>
+      </div>
+      <div class="controls">
+        <fieldset class="mode-switch">
+          <legend>Search mode</legend>
+          <label><input type="radio" name="mode" value="semantic" checked><span>Semantic</span></label>
+          <label><input type="radio" name="mode" value="lexical"><span>Lexical</span></label>
+        </fieldset>
+        <div class="identity">
+          <label for="user-id">Local development user ID</label>
+          <input id="user-id" type="text" inputmode="text" autocomplete="off" spellcheck="false" placeholder="Paste your development UUID" required aria-describedby="identity-note">
+        </div>
+      </div>
+      <p id="identity-note" class="fine-print">The ID scopes API results; it is not authentication. Stored in this browser tab only. Keep this service on your own machine.</p>
+    </form>
+
+    <section class="results-section" aria-labelledby="results-heading">
+      <div class="results-heading"><h2 id="results-heading">Results</h2><p id="result-count"></p></div>
+      <p id="status" class="status" role="status" aria-live="polite">Enter a query to explore your captured pages.</p>
+      <div id="results" class="results"></div>
+      <p id="truncation-note" class="fine-print" hidden>Results come from the first 50 ranked chunks. Pages with several matching chunks may limit the number of distinct pages shown.</p>
+    </section>
+    <section class="exploration-section" aria-labelledby="exploration-heading">
+      <div class="exploration-head">
+        <div>
+          <p class="eyebrow">EXPLORATION</p>
+          <h2 id="exploration-heading">Where your browsing has taken you</h2>
+          <p class="fine-print">Topics are provisional zero-shot suggestions. These indicators describe captured browsing evidence, not knowledge, mastery, or completion.</p>
+        </div>
+        <button id="explore-button" type="button">Explore topics ↗</button>
+      </div>
+      <p id="explore-status" class="status" role="status" aria-live="polite">Use the development user ID above, then explore your topics.</p>
+      <p id="explore-summary" class="explore-summary"></p>
+      <div id="topic-cards" class="topic-grid"></div>
+      <div id="recommendations" class="recommendations" hidden>
+        <h3>Suggested next topics</h3>
+        <p class="fine-print">Suggestions follow the fixed prerequisite graph and sparse captured-page evidence.</p>
+        <div id="recommendation-list"></div>
+      </div>
+    </section>
+    <section class="timeline-section" aria-labelledby="timeline-heading">
+      <div class="timeline-head">
+        <div>
+          <p class="eyebrow">TIMELINE</p>
+          <h2 id="timeline-heading">Recorded browsing history</h2>
+          <p class="fine-print">These are recorded visits, grouped for display in your browser’s local timezone. They are not inferred sessions, learning progress, or study completion.</p>
+          <p id="timeline-timezone" class="fine-print"></p>
+        </div>
+        <button id="timeline-button" type="button">Load timeline ↗</button>
+      </div>
+      <div class="timeline-filters">
+        <label>From date <input id="history-start-date" type="date"></label>
+        <label>Through date <input id="history-end-date" type="date"></label>
+        <label>Provisional topic
+          <select id="history-topic">
+            <option value="">All topics</option>
+          </select>
+        </label>
+      </div>
+      <p id="timeline-status" class="status" role="status" aria-live="polite">Use the development user ID above, then load recorded visits.</p>
+      <div id="timeline-events" class="timeline-events"></div>
+      <p id="timeline-limit-note" class="fine-print" hidden>The result is truncated by the endpoint’s bounded scan. Narrow the dates or choose a topic.</p>
+    </section>
+    <footer>APOGEE · Local search over your saved pages</footer>
+  </main>
+</body>
+</html>

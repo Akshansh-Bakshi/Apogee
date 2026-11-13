@@ -12,17 +12,17 @@ Browser Extension → Privacy Filter → Backend → PostgreSQL + pgvector → E
 
 | Component | Status |
 |---|---|
-| Browser Extension | **Future** (`extension/` is a placeholder) |
-| Privacy Filter (in the extension, before upload) | **Future** |
-| Backend (FastAPI) | **Current**: `GET /api/v1/health`, `POST /api/v1/capture` (unauthenticated, development stage) |
+| Browser Extension | **Current**: manual Chrome capture, verified in browser |
+| Privacy Filter (in the extension, before upload) | **Current**: HTTP(S) and configurable excluded domains; no content redaction |
+| Backend (FastAPI) | **Current**: health, capture, search, topics, and history APIs; unauthenticated local demo |
 | Ingestion (validate → normalise URL → page upsert → event) | **Current** |
-| PostgreSQL + pgvector | **Current**: schema + extension enabled; no vector data |
-| Embedding Layer | **Future** |
-| Retrieval (vector similarity search) | **Future** |
-| Temporal/Session Ranking | **Future** |
-| ML Ranking | **Future** |
-| Analytics (drift, clustering, trajectories) | **Future** |
-| Dashboard | **Future** |
+| PostgreSQL + pgvector | **Current**: four Alembic migrations through `0004`, stored 384-dimensional chunk embeddings |
+| Embedding Layer | **Current**: BAAI/bge-small-en-v1.5, background post-capture embedding |
+| Retrieval | **Current**: semantic `/api/v1/search` and lexical `/api/v1/search/lexical` |
+| Temporal/Session Ranking | **Future**: history is displayed and used in offline feature preparation; no live session reranker |
+| ML Ranking | **Future**: offline candidate preparation and evaluation exist; no trained reranker |
+| Analytics | **Current**: zero-shot topics, browsing coverage, graph suggestions, bounded timeline; no mastery inference |
+| Dashboard | **Current**: `/app` search, Exploration, and Timeline |
 | Authentication / device sync | **Future** |
 
 ---
@@ -187,19 +187,18 @@ exception text or logs, and the service logs identifiers only, never URLs.
 
 Authentication needs decisions that do not belong in an ingestion primitive: how a device proves
 its identity, how devices are registered and paired to a user, token lifetime and revocation.
-Designing them before the extension exists would be guesswork. Until then the endpoint accepts
+These remain separate from manual extension capture. The endpoint accepts
 caller-supplied `user_id`/`device_id`, which means **anyone who can reach the port can write events
 for any user**. It is a development-stage boundary, to be run only on a trusted machine or
 network. Ownership *consistency* (a device really belongs to that user) is checked, but it is not
 authentication.
 
-### How ingestion will feed embeddings and retrieval (future)
+### How ingestion feeds embeddings and retrieval
 
-Nothing here extracts text or computes embeddings. What ingestion provides is the stable input for
-them: `pages` is the unit that will be embedded (one row per user and canonical URL, with
-`extracted_text` reserved for the content), `page_created`/`last_seen_at` show which pages are new or
-revisited, and `browsing_events` supplies the temporal signal (recency, frequency, device, session)
-for ranking. Embeddings will hang off `pages`, as described under "Vector storage".
+Manual capture supplies visible text; ingestion cleans and stores chunks. After the capture
+transaction commits, a background task embeds current chunks with BGE and persists vectors.
+Both live retrievers return ranked chunks. The dashboard groups hits by page; the offline ML
+pipeline can use browsing events at query time. Live search does not use temporal/session ranking.
 
 ### Known limits
 
@@ -265,34 +264,19 @@ non-http(s) page, is never captured.
 
 ## Vector storage (pgvector)
 
-**Today: the extension is enabled, and no vector column exists.** This is deliberate.
+**Current:** migration `0003` stores 384-dimensional BGE chunk embeddings in
+`page_chunk_embeddings`; migration `0004` adds English full-text search support.
 
-A pgvector column has a fixed dimension in its type (`vector(N)`), and that dimension is decided by
-the embedding model, which has not been chosen. Inventing a number now would be a placeholder that
-pretends the ML system exists, and would have to be migrated away.
-
-Planned approach (not implemented), designed so the model can be swapped without redesigning the
-database:
-
-- Embeddings go in a **separate table** (working name `page_embeddings`), not on `pages`. Keys:
-  `page_id`, plus the model identifier, so several models can coexist and re-embedding is a backfill,
-  not an `ALTER TABLE` on `pages`.
-- The table also carries a denormalised `user_id` (with the same composite-FK trick), so a
-  user-scoped search is `WHERE user_id = :u ORDER BY embedding <=> :query LIMIT k` without a join.
-- The **dimension is configuration**, read when that migration is authored, and recorded next to
-  each embedding's model identifier. Changing to a model with a different dimension means a new
-  column or table plus an index for it. It does not change `pages`, `browsing_events` or any existing
-  code path.
-- Approximate indexes (HNSW/IVFFlat) combined with a per-user filter can return fewer than `k` rows;
-  at personal-archive scale an exact scan restricted by the `user_id` index may be enough. Decide
-  with measurements when retrieval is built.
+Vectors are attached to chunks, carry the owner and encoder model ID, and are searched with
+pgvector cosine distance. A new encoder dimension would require a schema change. Search returns
+chunk hits; page grouping is performed by the dashboard and offline evaluation tools.
 
 ## Privacy and deletion
 
 See [privacy.md](privacy.md). Architecturally: every table is owned by a user with
 `ON DELETE CASCADE`, so `DELETE FROM users WHERE id = …` removes all of a user's data;
-removing a device removes its events; removing a page removes the events pointing at it. Future
-embedding tables will follow the same rule.
+removing a device removes its events; removing a page removes the events pointing at it. The
+embedding table follows the same rule.
 
 ## Multi-device model
 
@@ -307,7 +291,7 @@ user. **How** a device authenticates and syncs is future work; there is no authe
 
 ---
 
-# FUTURE COMPONENTS (not implemented)
+# REMAINING FUTURE COMPONENTS
 
 1. **Always-on/autonomous capture.** The Day 3 extension only captures on a manual click; capturing
    automatically as the user browses (with its own privacy implications) is future work.
@@ -316,9 +300,9 @@ user. **How** a device authenticates and syncs is future work; there is no authe
    content *within* a captured page, manage exclusions from a dashboard, or detect Incognito beyond
    Chrome's own default of not running extensions there.
 3. **Authentication and device registration** for the capture API, plus event idempotency.
-4. **Embedding layer**: `page_chunks.text` → vectors, stored in pgvector (see above).
-5. **Retrieval**: natural-language query → user-scoped vector similarity search.
+4. **Embedding reliability**: a durable retry queue for failed background tasks.
+5. **Retrieval improvements**: trained page reranking only after suitable independent labels.
 6. **Temporal/session ranking**: recency, sessions, co-visitation.
 7. **ML ranking**: a model trained on relevance-labelled data.
-8. **Analytics**: topic evolution, semantic drift, clustering.
-9. **Dashboard**: coverage and research-trajectory visualisation, privacy controls.
+8. **Analytics extensions**: topic evolution, semantic drift, clustering.
+9. **Dashboard extensions**: privacy controls and deeper trajectory visualisation.
