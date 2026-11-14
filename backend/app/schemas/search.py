@@ -1,6 +1,7 @@
 """API contract for POST /api/v1/search. Separate from the ORM models."""
 
 from datetime import datetime
+from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -69,3 +70,4 @@ class SearchResponse(BaseModel):
     result_count: int
     latency_ms: float = Field(description="Encoder + database time for this request, in milliseconds.")
     results: list[SearchResult]
+    result_state: Literal["possible_matches", "insufficient_evidence"] = "insufficient_evidence"

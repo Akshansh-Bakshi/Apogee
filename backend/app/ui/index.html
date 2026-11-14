@@ -45,9 +45,10 @@
 
     <section class="results-section" aria-labelledby="results-heading">
       <div class="results-heading"><h2 id="results-heading">Results</h2><p id="result-count"></p></div>
-      <p id="status" class="status" role="status" aria-live="polite">Enter a query to explore your captured pages.</p>
+      <p id="status" class="status" role="status" aria-live="polite">Enter a query to explore your captured pages. Results are possible matches until you review them.</p>
       <div id="results" class="results"></div>
-      <p id="truncation-note" class="fine-print" hidden>Results come from the first 50 ranked chunks. Pages with several matching chunks may limit the number of distinct pages shown.</p>
+      <button id="show-more" class="show-more" type="button" hidden>Show more possible matches</button>
+      <p id="truncation-note" class="fine-print" hidden>Showing the first 50 distinct pages, ordered by each page’s best matching chunk. More pages may be available; try a more specific query.</p>
     </section>
     <section class="exploration-section" aria-labelledby="exploration-heading">
       <div class="exploration-head">

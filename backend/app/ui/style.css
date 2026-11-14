@@ -34,6 +34,9 @@ legend { font-size: .8rem; font-weight: 700; margin-bottom: .55rem; }
 .identity { flex: 0 1 320px; }
 .fine-print { color: #75857a; font-size: .77rem; line-height: 1.5; margin: .9rem 0 0; }
 .results-section { padding: 2.8rem 0 4rem; min-height: 220px; }
+.show-more { display: block; margin: 1.4rem auto 0; background: #eef7f2; color: #146e4e; border: 1px solid #b8d9c9; }
+.show-more[hidden] { display: none; }
+.show-more:hover { background: #dff0e7; }
 .results-heading { display: flex; align-items: baseline; gap: 1rem; border-bottom: 1px solid #d8e1da; }
 h2 { font-family: Georgia, Cambria, serif; font-size: 1.65rem; font-weight: 500; margin: 0 0 .8rem; }
 #result-count { margin: 0; color: #6a7b72; font-size: .85rem; }

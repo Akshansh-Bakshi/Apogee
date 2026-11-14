@@ -110,6 +110,10 @@ def test_results_are_ordered_by_cosine_distance_and_include_page_metadata(
     ]
     assert response.results[0].cosine_distance == pytest.approx(0.0, abs=1e-6)
     assert response.results[0].similarity == pytest.approx(1.0, abs=1e-6)
+    assert response.result_state == "possible_matches"
+    # Nearest-neighbor retrieval still includes a semantically orthogonal chunk. The state
+    # must not claim every returned chunk has independently established relevance.
+    assert any(hit.similarity == pytest.approx(0.0, abs=1e-6) for hit in response.results)
     for hit in response.results:
         assert hit.similarity == pytest.approx(1.0 - hit.cosine_distance)
     top = response.results[0]
@@ -151,6 +155,7 @@ def test_zero_results_returns_an_empty_list(db_session: Session) -> None:
 
     assert response.results == []
     assert response.result_count == 0
+    assert response.result_state == "insufficient_evidence"
     assert response.query == "nothing stored"
     assert response.latency_ms >= 0
 

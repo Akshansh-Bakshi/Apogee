@@ -89,6 +89,7 @@ def semantic_search(
         result_count=len(results),
         latency_ms=latency_ms,
         results=results,
+        result_state="possible_matches" if results else "insufficient_evidence",
     )
 
 

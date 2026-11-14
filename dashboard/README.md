@@ -15,10 +15,32 @@ held in this browser tab's session storage for convenience. It identifies which 
 existing API searches; it is **not authentication**. The Compose configuration binds the API
 and database to `127.0.0.1`; keep it that way.
 
-The dashboard asks the existing endpoints for up to 50 ranked chunks, then shows each page
-once in the order of its best-ranked chunk. The preview comes from that chunk. A page with
-many matching chunks can occupy several of the 50 positions, limiting page diversity. The
-dashboard does not provide a live hybrid ranking; the ML evaluation's hybrid baseline is offline.
+The dashboard uses `POST /api/v1/search/pages` with `user_id`, `query`, `mode` (semantic or
+lexical), and `limit` (1–50 distinct pages). SQL selects each page's strongest chunk before
+applying the page limit. Its preview and unchanged score are returned using the existing chunk
+result fields. `result_unit: page` and `truncated` identify the new response semantics. One
+look-ahead page determines truncation. The dashboard requests ten ranked pages initially and uses
+the bounded `offset` field to fetch more only when requested, up to the first 50 pages. No extra
+chunk evidence is returned, keeping the response
+bounded. The original `/api/v1/search` and `/api/v1/search/lexical` remain chunk APIs for existing
+clients and offline evaluation. The dashboard does not provide hybrid ranking.
+
+Semantic pages sort by minimum cosine distance, then page UUID; equal chunks within a page use
+chunk index and UUID. The old semantic endpoint has no defined tie-breaker, so exact-score ties
+can differ while unequal scores retain their order. Lexical pages preserve descending rank,
+descending last-seen time, page UUID, chunk index, and chunk UUID. The page query scores all
+eligible user/model chunks (or lexical matches) in one database query and encodes a semantic
+query once. This exact window operation does not benefit from the HNSW top-K shortcut and can
+cost more as the archive grows. More distinct pages does not establish greater relevance.
+Returned pages are labelled **possible matches**: lexical term matches and semantic nearest
+neighbors do not independently establish relevance. Both search APIs add a backward-compatible
+`result_state` field while retaining their ranked chunk lists and scores. Semantic search has no
+calibrated relevance cutoff and can return weak neighbors even for unrelated queries. Lexical
+search uses PostgreSQL English stemming and AND semantics for ordinary multiword queries;
+matching all stems can still be incidental. Empty results do not prove that a topic was never
+visited. The dashboard retains defensive page grouping for compatibility; the new API already
+returns unique pages. These messages were chosen from a small development diagnostic, not a
+held-out test.
 
 The **Exploration** section on the same page uses the development user ID above. Click
 **Explore topics** to see provisional assignments summarized as distinct captured pages,

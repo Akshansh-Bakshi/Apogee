@@ -132,6 +132,7 @@ def test_postgres_fts_ranks_closer_terms_first_and_scopes_results_to_user(
     payload = response.json()
     assert payload["query"] == "python installation"
     assert payload["result_count"] == 2
+    assert payload["result_state"] == "possible_matches"
     assert [hit["chunk_id"] for hit in payload["results"]] == [str(close_id), str(distant_id)]
     assert payload["results"][0]["lexical_score"] > payload["results"][1]["lexical_score"]
     assert set(payload["results"][0]) == RESULT_FIELDS
@@ -148,3 +149,27 @@ def test_lexical_search_returns_empty_results_for_no_match(
     assert response.status_code == 200
     assert response.json()["results"] == []
     assert response.json()["result_count"] == 0
+    assert response.json()["result_state"] == "no_sufficient_match"
+
+
+@pytest.mark.db
+def test_multi_term_query_requires_both_stems_but_only_claims_possible_match(
+    client: TestClient, engine: Engine, make_owner: Callable[[], Owner]
+) -> None:
+    owner = make_owner()
+    factory = sessionmaker(bind=engine)
+    with factory() as session:
+        page = make_page(session, session.get(User, owner.user_id), "https://example.com/terms")
+        make_page_chunk(session, page, "Game theory is discussed here.")
+        make_page_chunk(session, page, "Software development is discussed elsewhere.", chunk_index=1)
+        both = make_page_chunk(
+            session, page, "Game theory appears in one section; development appears in another.",
+            chunk_index=2,
+        )
+        both_id = both.id
+        session.commit()
+
+    response = client.post(ENDPOINT, json=body(owner, "game development"))
+    assert response.status_code == 200
+    assert response.json()["result_state"] == "possible_matches"
+    assert [hit["chunk_id"] for hit in response.json()["results"]] == [str(both_id)]

@@ -1,4 +1,7 @@
-import { groupPages, safePageUrl } from "./results.mjs";
+import {
+  canShowMore, isCurrentSearch, mergePageResults, pageSearchPayload,
+  safePageUrl, searchStatus,
+} from "./results.mjs";
 
 const form = document.getElementById("search-form");
 const queryInput = document.getElementById("query");
@@ -8,8 +11,11 @@ const status = document.getElementById("status");
 const count = document.getElementById("result-count");
 const results = document.getElementById("results");
 const note = document.getElementById("truncation-note");
-const LIMIT = 50;
+const showMore = document.getElementById("show-more");
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+let activeRequestId = 0;
+let activeController = null;
+let searchContext = null;
 
 userInput.value = sessionStorage.getItem("apogee-demo-user-id") || "";
 
@@ -62,29 +68,25 @@ function makeCard(hit) {
   return card;
 }
 
-form.addEventListener("submit", async (event) => {
-  event.preventDefault();
-  const query = queryInput.value.trim();
-  const userId = userInput.value.trim();
-  if (!query) { setStatus("Enter a search query.", "error"); queryInput.focus(); return; }
-  if (!UUID.test(userId)) { setStatus("Enter a valid development user UUID.", "error"); userInput.focus(); return; }
-  sessionStorage.setItem("apogee-demo-user-id", userId);
-  const mode = form.elements.mode.value;
-  const endpoint = mode === "lexical" ? "/api/v1/search/lexical" : "/api/v1/search";
+async function fetchPageBatch() {
+  if (!searchContext || activeController) return;
+  const context = searchContext;
+  const requestId = ++activeRequestId;
+  const offset = context.pages.length;
+  const endpoint = "/api/v1/search/pages";
 
   button.disabled = true;
-  button.textContent = "Searching…";
-  results.replaceChildren();
-  count.textContent = "";
-  note.hidden = true;
-  setStatus("Searching your saved pages…", "loading");
+  showMore.disabled = true;
+  button.textContent = offset ? "Loading…" : "Searching…";
+  setStatus(offset ? "Loading more possible matches…" : "Searching your saved pages…", "loading");
   const controller = new AbortController();
+  activeController = controller;
   const timeout = setTimeout(() => controller.abort(), 90000);
   try {
     const response = await fetch(endpoint, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ user_id: userId, query, limit: LIMIT }),
+      body: JSON.stringify(pageSearchPayload(context.userId, context.query, context.mode, offset)),
       signal: controller.signal,
     });
     if (!response.ok) {
@@ -93,20 +95,66 @@ form.addEventListener("submit", async (event) => {
     }
     const body = await response.json();
     if (!Array.isArray(body.results)) throw new Error("The search service returned an unexpected response.");
-    const pages = groupPages(body.results);
+    if (requestId !== activeRequestId) return;
+    if (!isCurrentSearch(requestId, activeRequestId, searchContext, body)) {
+      throw new Error("The search service returned results for a different query or mode.");
+    }
+    const pages = mergePageResults(context.pages, body.results);
+    context.pages = pages;
     count.textContent = `${pages.length} ${pages.length === 1 ? "page" : "pages"}`;
     if (!pages.length) {
-      setStatus("No matching pages found. Try another description or switch search modes.");
+      setStatus(searchStatus(context.mode, 0));
     } else {
-      setStatus("");
+      setStatus(searchStatus(context.mode, pages.length));
       results.replaceChildren(...pages.map(makeCard));
-      note.hidden = body.results.length < LIMIT;
     }
+    showMore.hidden = !canShowMore(body, pages.length);
+    note.hidden = pages.length < 50 || !body.truncated;
   } catch (error) {
+    if (requestId !== activeRequestId) return;
     setStatus(error.name === "AbortError" ? "Search timed out. Please try again." : error.message, "error");
+    showMore.hidden = !context.pages.length;
   } finally {
     clearTimeout(timeout);
-    button.disabled = false;
-    button.textContent = "Search ↗";
+    if (requestId === activeRequestId) {
+      activeController = null;
+      button.disabled = false;
+      showMore.disabled = false;
+      button.textContent = "Search ↗";
+    }
   }
+}
+
+form.addEventListener("submit", (event) => {
+  event.preventDefault();
+  const query = queryInput.value.trim();
+  const userId = userInput.value.trim();
+  if (!query) { setStatus("Enter a search query.", "error"); queryInput.focus(); return; }
+  if (!UUID.test(userId)) { setStatus("Enter a valid development user UUID.", "error"); userInput.focus(); return; }
+  sessionStorage.setItem("apogee-demo-user-id", userId);
+  activeController?.abort();
+  activeController = null;
+  activeRequestId += 1;
+  searchContext = { userId, query, mode: form.elements.mode.value, pages: [] };
+  results.replaceChildren();
+  count.textContent = "";
+  showMore.hidden = true;
+  note.hidden = true;
+  fetchPageBatch();
 });
+
+showMore.addEventListener("click", fetchPageBatch);
+
+form.elements.mode.forEach((input) => input.addEventListener("change", () => {
+  activeController?.abort();
+  activeController = null;
+  activeRequestId += 1;
+  searchContext = null;
+  results.replaceChildren();
+  count.textContent = "";
+  showMore.hidden = true;
+  note.hidden = true;
+  button.disabled = false;
+  button.textContent = "Search ↗";
+  setStatus("Search mode changed. Submit the query to see possible matches.");
+}));

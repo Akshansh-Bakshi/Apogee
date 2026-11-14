@@ -75,4 +75,5 @@ def lexical_search(session: Session, request: LexicalSearchRequest) -> LexicalSe
         result_count=len(results),
         latency_ms=latency_ms,
         results=results,
+        result_state="possible_matches" if results else "no_sufficient_match",
     )

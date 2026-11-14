@@ -1,6 +1,7 @@
 """API contract for the independent PostgreSQL full-text retrieval baseline."""
 
 from datetime import datetime
+from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -59,3 +60,4 @@ class LexicalSearchResponse(BaseModel):
     result_count: int
     latency_ms: float = Field(description="Database search time for this request, in milliseconds.")
     results: list[LexicalSearchResult]
+    result_state: Literal["possible_matches", "no_sufficient_match"] = "no_sufficient_match"
