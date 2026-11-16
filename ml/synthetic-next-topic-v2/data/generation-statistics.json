@@ -1,0 +1,69 @@
+{
+  "candidate_count": 2880,
+  "dataset_version": "apogee-synthetic-next-topic-v2",
+  "family_count": 36,
+  "label_by_topic": {
+    "algorithms": {
+      "0": 158,
+      "1": 63,
+      "2": 139
+    },
+    "cloud-systems": {
+      "0": 207,
+      "1": 136,
+      "2": 17
+    },
+    "databases": {
+      "0": 230,
+      "1": 116,
+      "2": 14
+    },
+    "information-retrieval": {
+      "0": 153,
+      "1": 75,
+      "2": 132
+    },
+    "machine-learning": {
+      "0": 202,
+      "1": 141,
+      "2": 17
+    },
+    "programming": {
+      "0": 234,
+      "1": 125,
+      "2": 1
+    },
+    "security-privacy": {
+      "0": 207,
+      "1": 140,
+      "2": 13
+    },
+    "web-development": {
+      "0": 153,
+      "1": 61,
+      "2": 146
+    }
+  },
+  "labels": {
+    "0": 1544,
+    "1": 857,
+    "2": 479
+  },
+  "limitations": [
+    "Labels imitate explicit synthetic rules; no real feedback exists.",
+    "The fixed rubric is not an estimate of user preference."
+  ],
+  "scenario_count": 360,
+  "split_families": {
+    "test": 10,
+    "train": 20,
+    "validation": 6
+  },
+  "split_scenarios": {
+    "test": 100,
+    "train": 200,
+    "validation": 60
+  },
+  "synthetic": true,
+  "validation": "passed"
+}

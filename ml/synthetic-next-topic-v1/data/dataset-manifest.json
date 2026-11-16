@@ -1,0 +1,67 @@
+{
+  "artifacts": {
+    "candidates.jsonl": {
+      "sha256": "23d32adebc77ffbca292a6cee5887b64f4f4586b86a5a4b1eb913ee3b8447aa0"
+    },
+    "generation-statistics.json": {
+      "sha256": "cab1162bc27132ada8a9668ccef7ec926fa0e87636d6c95de783c45c3c20810d"
+    },
+    "human-review-sample-synthetic-label-key.csv": {
+      "sha256": "eef301016ab4c42477e1b450fab5d87dd637ad0012d75a77faca9e220139a9d5"
+    },
+    "human-review-sample.csv": {
+      "sha256": "92212ea2a27200596be8ff7e4d79defa5301e7de26c6a5e28e7709b37f113fc2"
+    },
+    "scenarios.jsonl": {
+      "sha256": "e813e176289d15ac6ec9c43eae51b16c9584ee65e75785b3a536b3a375004245"
+    },
+    "split-test.json": {
+      "sha256": "89b55de5cf564dfa20c96a0acfee025852e54dc305971b8fa3f8a84f6ff8dfcb"
+    },
+    "split-train.json": {
+      "sha256": "931211164af5fa23e486a3c1a5f767f7acb20d050e7de1c4d5a4608f2da73b4e"
+    },
+    "split-validation.json": {
+      "sha256": "1c6c4b274475de45d48507b38f342d3b6a322023863938510402861908fa17ef"
+    }
+  },
+  "dataset_version": "apogee-synthetic-next-topic-v1",
+  "excluded_metadata_fields": [
+    "scenario_id",
+    "scenario_family",
+    "split",
+    "scenario_narrative",
+    "candidate_topic_name",
+    "synthetic_label_provenance",
+    "synthetic_label_disclaimer"
+  ],
+  "feature_schema_version": "apogee-next-topic-features-v1",
+  "generation_seed": 20261116,
+  "generator": "ml/generate_synthetic_next_topic.py",
+  "group_field": "scenario_id",
+  "label_rubric_version": "synthetic-next-topic-rubric-v1",
+  "model_feature_fields": [
+    "exploration_state",
+    "candidate_topic_id",
+    "candidate_page_count",
+    "candidate_visit_count",
+    "candidate_recency_days",
+    "candidate_is_observed",
+    "observed_topic_breadth",
+    "total_observed_pages",
+    "total_observed_visits",
+    "repeat_visit_ratio",
+    "candidate_page_share",
+    "candidate_visit_share",
+    "candidate_prerequisite_count",
+    "observed_prerequisite_count",
+    "missing_prerequisite_count",
+    "prerequisite_evidence_level",
+    "candidate_is_graph_gap",
+    "candidate_is_direct_extension"
+  ],
+  "review_sample_seed": 20261117,
+  "synthetic": true,
+  "target_field": "synthetic_usefulness_target",
+  "taxonomy_version": "apogee-technical-v1"
+}

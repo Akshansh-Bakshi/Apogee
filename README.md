@@ -4,8 +4,8 @@
 
 Apogee is a self-hosted personal web-memory system. The goal: you describe a page you half-remember
 ("that article about consensus algorithms I read on my phone last month") and Apogee finds it,
-using semantic embeddings and recorded browsing events. No supervised ranking model is trained
-or deployed. Your data lives
+using semantic embeddings and recorded browsing events. BGE-small-en-v1.5 is pretrained and was not fine-tuned. Page retrieval uses its embeddings;
+an experimental next-topic ranker is trained only on synthetic rubric labels. Your data lives
 in a backend and database that *you* run. Multiple devices will feed one user account. Privacy
 controls are a first-class requirement, not an afterthought (see [docs/privacy.md](docs/privacy.md)).
 
@@ -28,8 +28,11 @@ chunked text:
 - Provisional zero-shot topic suggestions (`GET /api/v1/topics/assignments`), observed
   browsing activity and graph-based prerequisite suggestions (`GET /api/v1/topics/coverage`),
   and bounded event history (`GET /api/v1/history`)
-- Local dashboard at `http://127.0.0.1:8000/app` (search, Exploration and Timeline; see
+- Local dashboard at `http://127.0.0.1:8000/app` (search, Exploration Graph and Timeline; see
   [dashboard/README.md](dashboard/README.md))
+- Optional current-evidence model recommendations at `GET /api/v1/topics/recommendations/model`,
+  with explicit graph fallback. See [the model contract and limitations](docs/next-topic-model.md).
+  Synthetic training does not establish real-user recommendation performance.
 - A minimal Chrome (Manifest V3) extension: a manual "Capture this page" button, a client-side
   privacy filter (excluded domains + http/https-only), and settings for the API URL and IDs (see
   [extension/README.md](extension/README.md))
@@ -45,7 +48,7 @@ chunked text:
 ### Not implemented yet
 
 Always-on capture, authentication and device registration/sync, session inference,
-supervised ranking or topic classification, and clustering/drift analysis. The extension
+supervised page retrieval ranking or supervised topic classification, and clustering/drift analysis. The extension
 stores configured IDs unencrypted. Topic cosine similarities are not probabilities; the
 exploration activity index measures observed browsing, not learning mastery. Caller-supplied
 `user_id` scopes queries but is not authentication. Keep the Compose ports loopback-bound; see

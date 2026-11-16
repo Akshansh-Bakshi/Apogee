@@ -69,6 +69,34 @@ footer { border-top: 1px solid #d8e1da; padding: 1.2rem 0 2rem; color: #859389; 
 #recommendation-list { display: grid; gap: .7rem; margin-top: 1rem; }
 .recommendation-card h4 { margin: 0 0 .4rem; font-size: 1rem; }
 .recommendation-card p { color: #52695b; line-height: 1.55; font-size: .88rem; margin: 0; }
+.graph-section { margin: 1.5rem 0 2rem; padding: 1.2rem; background: #fff; border: 1px solid #d4e2d7; border-radius: 20px; box-shadow: 0 12px 32px #2448320c; }
+.graph-section[hidden], .graph-detail[hidden] { display: none; }
+.graph-heading { display: flex; justify-content: space-between; align-items: center; gap: 1rem; }
+.graph-heading .eyebrow { margin: 0; }
+.graph-heading h3 { margin: .25rem 0; }
+#graph-reset { background: #e9f3eb; color: #175c42; border: 1px solid #bfd5c5; padding: .55rem .8rem; }
+.graph-layout { display: grid; grid-template-columns: minmax(0, 1fr); gap: .8rem; }
+.graph-canvas { background: #f4f8f3; border: 1px solid #dce7de; border-radius: 14px; overflow: auto; touch-action: none; }
+#topic-graph { width: 100%; min-width: 500px; display: block; cursor: grab; }
+#topic-graph:active { cursor: grabbing; }
+.graph-edge { stroke: #688d7b; stroke-width: 2.2; }
+.graph-node { cursor: pointer; }
+.graph-node circle { fill: #e7ede7; stroke: #758a7c; stroke-width: 2; }
+.graph-node.observed circle { fill: #b9dfc7; stroke: #287250; }
+.graph-node.highlighted circle { stroke: #b46520; stroke-width: 5; }
+.graph-node.selected circle, .graph-node:focus-visible circle { stroke: #134d9a; stroke-width: 5; }
+.graph-node text { fill: #183e2b; font-size: 12px; font-weight: 750; pointer-events: none; }
+.graph-node .graph-count { font-size: 10px; font-weight: 500; }
+.graph-detail { padding: .7rem .9rem; background: #f3f7f2; border-radius: 12px; overflow-wrap: anywhere; font-size: .78rem; line-height: 1.45; }
+.graph-detail h4 { font-size: 1rem; margin: .2rem 0 .6rem; }
+.graph-detail p { margin: .5rem 0; }
+.graph-legend { display: flex; flex-wrap: wrap; align-items: center; gap: .45rem .65rem; color: #536858; font-size: .75rem; }
+.legend-dot { width: .8rem; height: .8rem; display: inline-block; border: 2px solid #758a7c; background: #e7ede7; border-radius: 50%; }
+.legend-dot.observed { background: #b9dfc7; border-color: #287250; }
+.legend-dot.suggested { border: 3px solid #b46520; }
+.graph-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: .4rem; }
+.graph-list button { white-space: normal; text-align: left; background: #eef5ef; color: #174b34; border: 1px solid #c6dbc9; padding: .55rem .7rem; font-size: .8rem; }
+.graph-list button[aria-pressed="true"] { background: #d8e9dc; border-color: #2b7c56; }
 .timeline-section { padding: 2.5rem 0 4rem; border-top: 1px solid #d8e1da; }
 .timeline-head { display: flex; justify-content: space-between; align-items: center; gap: 1.5rem; }
 .timeline-head > div { max-width: 650px; }
@@ -93,4 +121,21 @@ footer { border-top: 1px solid #d8e1da; padding: 1.2rem 0 2rem; color: #859389; 
   .exploration-head { flex-direction: column; align-items: stretch; }
   .timeline-head { flex-direction: column; align-items: stretch; }
   .timeline-filters { grid-template-columns: 1fr; }
+  .graph-layout { grid-template-columns: 1fr; }
+  .graph-heading { align-items: flex-start; }
 }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; transition-duration: .01ms !important; } }
+
+.graph-canvas { max-width: 760px; width: 100%; margin: 0 auto; }
+.graph-detail { border-left: 3px solid #287250; columns: 2 240px; }
+.graph-detail p { break-inside: avoid; }
+.scope-note { padding: .75rem 1rem; border-left: 3px solid #287250; background: #e8f2eb; color: #254c37; font-size: .85rem; line-height: 1.5; }
+.graph-alternative, .topic-breakdown { margin: 1rem 0; }
+.graph-alternative summary, .topic-breakdown summary { cursor: pointer; padding: .8rem 0; font-weight: 650; color: #28543b; }
+summary:focus-visible { outline: 3px solid #78cba4; outline-offset: 2px; }
+.model-suggestions { border-top: 1px solid #d4e2d7; margin-top: 1.5rem; padding-top: 1rem; }
+#graph-model-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: .75rem; }
+.model-suggestion { padding: 1rem; border: 1px solid #dac9b5; border-radius: 12px; background: #fcfaf5; }
+.model-suggestion h4 { margin: 0 0 .7rem; }
+.model-suggestion p { font-size: .8rem; line-height: 1.55; color: #4c594e; }
+.model-suggestion .model-grade { font-weight: 750; color: #764a1a; }

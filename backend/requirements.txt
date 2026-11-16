@@ -1,4 +1,4 @@
-# Runtime dependencies. Version ranges, not a lockfile: pin/lock before deploying.
+# Model-loader compatibility pins match the verified Python 3.12 runtime artifact.
 fastapi>=0.115
 uvicorn>=0.30
 pydantic>=2.7,<3
@@ -7,5 +7,7 @@ sqlalchemy>=2.0.30,<3
 alembic>=1.13,<2
 psycopg[binary]>=3.2,<4
 pgvector>=0.3,<1
-numpy>=1.24,<3
+numpy==2.5.3
+scikit-learn==1.9.1
+joblib==1.6.0
 sentence-transformers>=3.0,<6

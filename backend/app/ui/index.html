@@ -55,15 +55,26 @@
         <div>
           <p class="eyebrow">EXPLORATION</p>
           <h2 id="exploration-heading">Where your browsing has taken you</h2>
+          <p class="scope-note">Overall captured browsing history ? independent of your current search query.</p>
           <p class="fine-print">Topics are provisional zero-shot suggestions. These indicators describe captured browsing evidence, not knowledge, mastery, or completion.</p>
         </div>
         <button id="explore-button" type="button">Explore topics ↗</button>
       </div>
       <p id="explore-status" class="status" role="status" aria-live="polite">Use the development user ID above, then explore your topics.</p>
       <p id="explore-summary" class="explore-summary"></p>
-      <div id="topic-cards" class="topic-grid"></div>
+      <section id="exploration-graph" class="graph-section" aria-labelledby="graph-heading" hidden>
+        <div class="graph-heading"><div><p class="eyebrow">TOPIC MAP</p><h3 id="graph-heading">Your exploration graph</h3></div><button id="graph-reset" type="button">Reset view</button></div>
+        <p class="fine-print">Arrows point from a prerequisite to its dependent topic. Only three links exist in this frozen taxonomy; topics without links are deliberately unconnected. Node size reflects assigned captured pages; outlined nodes are suggestions. Every topic appears, including those without captured evidence.</p>
+        <p id="graph-status" class="status" role="status" aria-live="polite"></p>
+        <div class="graph-layout"><div class="graph-canvas"><svg id="topic-graph" viewBox="0 0 660 490" role="group" aria-label="Interactive topic prerequisite graph; use the topic list below as a keyboard alternative"></svg></div><div id="graph-detail" class="graph-detail" aria-live="polite" hidden></div></div>
+        <p class="graph-legend"><span class="legend-dot observed"></span>Captured-page evidence <span class="legend-dot"></span>No assigned page <span class="legend-dot suggested"></span>Suggested next topic <span aria-hidden="true">→</span> Explicit prerequisite</p>
+        <p class="fine-print">Topic assignment uses pretrained BGE embeddings. A separately trained logistic regression ranks next topics using synthetic rubric labels. Its expected grades are not confidence, mastery, or verified real-world usefulness.</p>
+        <details class="graph-alternative"><summary>Browse topics as an accessible list</summary><div id="graph-list" class="graph-list"></div></details>
+        <section class="model-suggestions" aria-labelledby="model-suggestions-heading"><h3 id="model-suggestions-heading">Model-ranked next topics</h3><p class="scope-note">Based on overall captured browsing history. The current search query does not affect these suggestions.</p><div id="graph-model-list"></div></section>
+      </section>
+      <details class="topic-breakdown"><summary>All topic activity and assignment details</summary><div id="topic-cards" class="topic-grid"></div></details>
       <div id="recommendations" class="recommendations" hidden>
-        <h3>Suggested next topics</h3>
+        <h3>Rule-based prerequisite suggestions</h3>
         <p class="fine-print">Suggestions follow the fixed prerequisite graph and sparse captured-page evidence.</p>
         <div id="recommendation-list"></div>
       </div>

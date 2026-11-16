@@ -84,3 +84,17 @@ current local database or make API calls.
 The local, blinded human topic review and offline evaluation workflow is documented in
 [`topic-annotation.md`](topic-annotation.md). It evaluates the provisional
 `apogee-technical-v1` assignments and does not train a model.
+
+## Synthetic next-topic ranking data
+
+The explicitly fictional, privacy-safe next-topic dataset and its reproducible generator are
+documented in [`synthetic-next-topic-v1/README.md`](synthetic-next-topic-v1/README.md). It is an
+exploratory supervised-learning resource with synthetic rubric targets, not user feedback or
+independent empirical ground truth. Generation does not access the API or production database and
+does not train a model.
+
+V2 synthetic data and the trained next-topic logistic ranker are documented in
+[`synthetic-next-topic-v2/README.md`](synthetic-next-topic-v2/README.md) and
+[`synthetic-next-topic-v2/TRAINING.md`](synthetic-next-topic-v2/TRAINING.md). Its labels are
+synthetic rubric judgments rather than real recommendation feedback. The deployable artifact
+is documented in [`../backend/app/artifacts/next-topic-v2-py312/README.md`](../backend/app/artifacts/next-topic-v2-py312/README.md).

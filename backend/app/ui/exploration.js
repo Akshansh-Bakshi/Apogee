@@ -1,4 +1,6 @@
 import { ambiguityText, summaryText, topicCountText } from "./exploration.mjs";
+import { clearGraph, renderGraph } from "./graph.js";
+import { activityExplanation } from "./graph.mjs";
 
 const userInput = document.getElementById("user-id");
 const button = document.getElementById("explore-button");
@@ -7,6 +9,7 @@ const summary = document.getElementById("explore-summary");
 const cards = document.getElementById("topic-cards");
 const recommendations = document.getElementById("recommendations");
 const list = document.getElementById("recommendation-list");
+let activeExplore = 0;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function setStatus(message, kind = "") {
@@ -40,11 +43,13 @@ function renderTopic(topic) {
     paragraph(breadth, "fine-print"),
     paragraph(ambiguityText(topic), "ambiguity-note"),
     paragraph(`Browsing activity index: ${Number(topic.activity_index).toFixed(2)} / 1`, "activity-index"),
+    paragraph(activityExplanation(topic), "fine-print"),
   );
   return card;
 }
 
 button.addEventListener("click", async () => {
+  const requestId = ++activeExplore;
   const userId = userInput.value.trim();
   if (!UUID.test(userId)) {
     setStatus("Enter a valid development user UUID above.", "error");
@@ -59,6 +64,7 @@ button.addEventListener("click", async () => {
   cards.replaceChildren();
   list.replaceChildren();
   recommendations.hidden = true;
+  clearGraph();
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 90000);
   try {
@@ -68,16 +74,46 @@ button.addEventListener("click", async () => {
       throw new Error(body?.error?.message || `Exploration failed (HTTP ${response.status}).`);
     }
     const body = await response.json();
+    if (requestId !== activeExplore || userInput.value.trim() !== userId) return;
     if (!Array.isArray(body.topics) || !Array.isArray(body.recommendations)) {
       throw new Error("The exploration service returned an unexpected response.");
     }
+    let definitions = null;
+    let graphProblem = "";
+    try {
+      const taxonomy = await fetch(`/api/v1/topics/assignments?user_id=${encodeURIComponent(userId)}`, { signal: controller.signal });
+      if (!taxonomy.ok) throw new Error("Taxonomy endpoint unavailable");
+      const data = await taxonomy.json();
+      if (data.taxonomy_version !== body.taxonomy_version || !Array.isArray(data.topics)) throw new Error("Taxonomy mismatch");
+      definitions = data.topics;
+    } catch (error) {
+      if (error.name === "AbortError") throw error;
+      graphProblem = " Graph unavailable: taxonomy could not be loaded.";
+    }
+    let model = { source: "rule_based", fallback_reason: "model_unavailable", rule_recommendations: body.recommendations };
+    if (definitions) {
+      try {
+        const reply = await fetch(`/api/v1/topics/recommendations/model?user_id=${encodeURIComponent(userId)}`, { signal: controller.signal });
+        if (!reply.ok) throw new Error("Model endpoint unavailable");
+        const data = await reply.json();
+        if (!Array.isArray(data.ranking) || !Array.isArray(data.rule_recommendations)) throw new Error("Invalid model response");
+        model = data;
+      } catch (error) {
+        if (error.name === "AbortError") throw error;
+      }
+    }
+    if (requestId !== activeExplore || userInput.value.trim() !== userId) return;
+    if (definitions) {
+      try { renderGraph(body, definitions, model); }
+      catch { graphProblem = " Graph unavailable: taxonomy evidence did not match."; clearGraph(); }
+    }
     summary.textContent = summaryText(body);
     if (!body.total_pages) {
-      setStatus("No captured pages found for this user.");
+      setStatus(`No captured pages found for this user. The graph still shows all taxonomy topics.${graphProblem}`);
     } else {
       setStatus(body.assigned_pages
-        ? "Observed browsing activity across the fixed topic taxonomy."
-        : "There is not enough embedded page content to suggest topics yet.");
+        ? `Observed browsing activity across the fixed topic taxonomy.${graphProblem}`
+        : `There is not enough embedded page content to suggest topics yet.${graphProblem}`);
       cards.replaceChildren(...body.topics.map(renderTopic));
       if (body.recommendations.length) {
         recommendations.hidden = false;
@@ -96,6 +132,7 @@ button.addEventListener("click", async () => {
     }
   } catch (error) {
     setStatus(error.name === "AbortError" ? "Exploration timed out. Please try again." : error.message, "error");
+    clearGraph();
   } finally {
     clearTimeout(timeout);
     button.disabled = false;

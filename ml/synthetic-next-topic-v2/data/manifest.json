@@ -1,0 +1,38 @@
+{
+  "synthetic": true,
+  "dataset_version": "apogee-synthetic-next-topic-v2",
+  "feature_schema_version": "apogee-next-topic-features-v2",
+  "taxonomy_version": "apogee-technical-v1",
+  "seed": 20261116,
+  "feature_fields": [
+    "candidate_topic_id",
+    "candidate_page_count",
+    "candidate_visit_count",
+    "candidate_recency_days",
+    "candidate_is_observed",
+    "observed_topic_breadth",
+    "total_observed_pages",
+    "total_observed_visits",
+    "repeat_visit_ratio",
+    "candidate_page_share",
+    "candidate_visit_share",
+    "candidate_prerequisite_count",
+    "observed_prerequisite_count",
+    "missing_prerequisite_count",
+    "prerequisite_evidence_level",
+    "candidate_is_graph_gap",
+    "candidate_is_direct_extension"
+  ],
+  "target_field": "synthetic_usefulness_target",
+  "group_field": "scenario_id",
+  "artifacts": {
+    "candidates.jsonl": "56aac54b31da76a08f9aad1ef0bdc13ecd8c60f84460ad5e727c97bf99573b69",
+    "generation-statistics.json": "8ed431fa10401476a470137f371109e5b792ca5637f809927cde4d9538931bdd",
+    "human-review-sample-label-key.csv": "16bf2137cd24a77504429678e9cd3164b5087c892305ced01d89563553748e86",
+    "human-review-sample.csv": "ef45ec51eb96016322d540f270495548f4d650c5dab6205702438ebf1d921c05",
+    "scenarios.jsonl": "e2ca0ece651da1f2ef0b59bd6a72ae7899d0d7fa2ad3ccb5a04d2967dfec1921",
+    "split-test.json": "e3d9bc685501f36f1af50a2be42d591cc982fec255f2ac72c8f339b21bee5ad5",
+    "split-train.json": "aa57764df7dc08304ba9f119f9b5a00dab4880d76bb90220e8101bab3d86189b",
+    "split-validation.json": "f4301309860ef9f20539bc6fcac9ecce09bc384d28d861ac1453c8aea8566719"
+  }
+}

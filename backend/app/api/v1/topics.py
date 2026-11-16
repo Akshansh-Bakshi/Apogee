@@ -7,10 +7,17 @@ from fastapi import APIRouter, Request
 from app.api.deps import DbSession
 from app.schemas.topics import TopicAssignmentsResponse
 from app.schemas.topic_coverage import TopicCoverageResponse
+from app.schemas.next_topic import ModelRecommendations
+from app.services.model_recommendations import current_recommendations
 from app.services.topic_coverage import user_topic_coverage
 from app.services.topics import assign_user_pages
 
 router = APIRouter(tags=["topics"])
+
+@router.get('/topics/recommendations/model', response_model=ModelRecommendations)
+def model_recommendations(user_id: UUID, request: Request, session: DbSession):
+    """Local-only current evidence; caller UUID is a scope filter, not authentication."""
+    return current_recommendations(session, user_id, request.app.state.topic_assigner)
 
 
 @router.get(

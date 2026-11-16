@@ -1,5 +1,5 @@
 # Development image for the Apogee backend (includes test dependencies so `pytest` runs in-container).
-FROM python:3.12-slim
+FROM python:3.12.14-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \

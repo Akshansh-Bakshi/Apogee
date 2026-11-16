@@ -20,9 +20,9 @@ Browser Extension → Privacy Filter → Backend → PostgreSQL + pgvector → E
 | Embedding Layer | **Current**: BAAI/bge-small-en-v1.5, background post-capture embedding |
 | Retrieval | **Current**: semantic `/api/v1/search` and lexical `/api/v1/search/lexical` |
 | Temporal/Session Ranking | **Future**: history is displayed and used in offline feature preparation; no live session reranker |
-| ML Ranking | **Future**: offline candidate preparation and evaluation exist; no trained reranker |
+| ML Ranking | **Current**: experimental synthetic-trained next-topic logistic ranker with graph fallback ([contract](next-topic-model.md)); supervised page reranking remains future |
 | Analytics | **Current**: zero-shot topics, browsing coverage, graph suggestions, bounded timeline; no mastery inference |
-| Dashboard | **Current**: `/app` search, Exploration, and Timeline |
+| Dashboard | **Current**: `/app` search, interactive eight-topic Exploration Graph, and Timeline |
 | Authentication / device sync | **Future** |
 
 ---

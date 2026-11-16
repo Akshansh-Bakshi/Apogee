@@ -45,9 +45,16 @@ held-out test.
 The **Exploration** section on the same page uses the development user ID above. Click
 **Explore topics** to see provisional assignments summarized as distinct captured pages,
 recorded visits, latest activity, related-topic breadth, and a browsing activity index.
-Next-topic suggestions use only the fixed prerequisite graph and actual captured-page
-evidence. They do not measure learning or mastery. The exact formula and sparse-evidence
-rule are in `backend/app/services/TOPICS.md`.
+The Exploration Graph shows all eight frozen topics and the three explicit prerequisite arrows.
+Node size reflects directly assigned captured pages. Select nodes by pointer, Enter, Space or
+the accessible list for evidence details; zoom with the wheel, drag to pan, or reset the view.
+The model's top three topics use overall captured browsing history, independent of the search
+query, and show expected synthetic rubric grades. The separate prerequisite suggestions follow
+the fixed graph and sparse captured-page evidence. A zero-page topic may have a nonzero activity
+index from related-topic breadth. Neither index nor model grade measures learning mastery,
+confidence or verified usefulness. The exact activity formula and graph rule are in
+[`backend/app/services/TOPICS.md`](../backend/app/services/TOPICS.md); model provenance is in
+[`docs/next-topic-model.md`](../docs/next-topic-model.md).
 
 The **Recorded browsing history** section is a bounded, read-only view of stored browsing
 events. Click **Load timeline** to show at most 100 events, grouped by calendar date in the
@@ -76,4 +83,5 @@ docker compose --env-file .env -f infrastructure/docker-compose.yml exec backend
 node --test backend/tests/dashboard_results.test.mjs
 node --test backend/tests/dashboard_exploration.test.mjs
 node --test backend/tests/dashboard_history.test.mjs
+node --test backend/tests/dashboard_graph.test.mjs
 ```

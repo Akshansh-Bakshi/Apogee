@@ -1,0 +1,154 @@
+{
+  "candidate_count": 1200,
+  "candidate_coverage_by_topic": {
+    "algorithms": 150,
+    "cloud-systems": 150,
+    "databases": 150,
+    "information-retrieval": 150,
+    "machine-learning": 150,
+    "programming": 150,
+    "security-privacy": 150,
+    "web-development": 150
+  },
+  "candidate_topics_per_scenario": 8,
+  "dataset_version": "apogee-synthetic-next-topic-v1",
+  "exploration_state_distribution": {
+    "advanced": 20,
+    "beginner": 20,
+    "interdisciplinary": 40,
+    "intermediate": 40,
+    "repeated_visits": 10,
+    "returning_to_foundations": 10,
+    "sparse_history": 10
+  },
+  "generation_seed": 20261116,
+  "graph_gap_candidate_count": 64,
+  "graph_gap_candidates_labelled_not_useful": 32,
+  "label_distribution": {
+    "0": 590,
+    "1": 315,
+    "2": 295
+  },
+  "label_distribution_by_topic": {
+    "algorithms": {
+      "0": 94,
+      "1": 25,
+      "2": 31
+    },
+    "cloud-systems": {
+      "0": 88,
+      "1": 30,
+      "2": 32
+    },
+    "databases": {
+      "0": 41,
+      "1": 68,
+      "2": 41
+    },
+    "information-retrieval": {
+      "0": 80,
+      "1": 28,
+      "2": 42
+    },
+    "machine-learning": {
+      "0": 108,
+      "1": 16,
+      "2": 26
+    },
+    "programming": {
+      "0": 75,
+      "1": 29,
+      "2": 46
+    },
+    "security-privacy": {
+      "0": 46,
+      "1": 65,
+      "2": 39
+    },
+    "web-development": {
+      "0": 58,
+      "1": 54,
+      "2": 38
+    }
+  },
+  "label_distribution_percent": {
+    "0": 49.17,
+    "1": 26.25,
+    "2": 24.58
+  },
+  "limitations": [
+    "All targets are synthetic rubric judgments rather than observed user feedback.",
+    "Only 15 scenario families exist; the frozen test split contains three families.",
+    "Family holdout measures transfer to these fictional templates, not real-user generalization."
+  ],
+  "review_sample_candidate_count": 240,
+  "review_sample_scenario_count": 30,
+  "scenario_count": 150,
+  "scenario_family_count": 15,
+  "scenario_family_distribution": {
+    "browser_toolmaker": 10,
+    "cloud_deployment": 10,
+    "cross_domain_research": 10,
+    "data_foundations": 10,
+    "first_steps_code": 10,
+    "foundation_revisit": 10,
+    "graph_pathfinder": 10,
+    "model_practitioner": 10,
+    "privacy_hardening": 10,
+    "production_search_ops": 10,
+    "repeated_algorithm_loop": 10,
+    "secure_data_platform": 10,
+    "semantic_search_builder": 10,
+    "sparse_returner": 10,
+    "web_api_builder": 10
+  },
+  "split_candidate_counts": {
+    "test": 240,
+    "train": 720,
+    "validation": 240
+  },
+  "split_family_counts": {
+    "test": 3,
+    "train": 9,
+    "validation": 3
+  },
+  "split_label_distribution": {
+    "test": {
+      "0": 117,
+      "1": 63,
+      "2": 60
+    },
+    "train": {
+      "0": 353,
+      "1": 192,
+      "2": 175
+    },
+    "validation": {
+      "0": 120,
+      "1": 60,
+      "2": 60
+    }
+  },
+  "split_scenario_counts": {
+    "test": 30,
+    "train": 90,
+    "validation": 30
+  },
+  "strong_label_distribution_by_topic": {
+    "algorithms": 31,
+    "cloud-systems": 32,
+    "databases": 41,
+    "information-retrieval": 42,
+    "machine-learning": 26,
+    "programming": 46,
+    "security-privacy": 39,
+    "web-development": 38
+  },
+  "strong_targets_per_scenario_distribution": {
+    "1": 47,
+    "2": 61,
+    "3": 42
+  },
+  "synthetic": true,
+  "validation_status": "passed"
+}
